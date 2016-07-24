@@ -52,7 +52,6 @@ for x in range(2006,2016):
 print("Updating to current Top100")
 file = open("Top100.txt", "w")    
 webpage = urlopen("http://www.billboard.com/charts/hot-100").read()
-print('\n Top 100 Right Now\n')
 songs = str(webpage).split('<h2 class="chart-row__song">')
 for y in range (1,101):
     s2 = songs[y].split('</h2>')
@@ -67,3 +66,4 @@ for y in range (1,101):
         artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace("&amp;","&").replace("&quot;",'"')
     file.write("%s - %s\n" % (sn.strip(), artist[:len(artist)-2]))
 file.close()
+print("Top100 Updated.")
