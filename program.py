@@ -134,19 +134,21 @@ def list_download(isHistory):
             printHistory()
         else:
             screen_clear()    
-    for songs in fhand:
-        if "www.youtube.com" in songs:
-            if '@' not in songs:
-                songs = songs.strip()
+    for songs in fhand:        
+        if songs.strip() != "":
+            if "www.youtube.com" in songs:
+                if '@' not in songs:
+                    songs = songs.strip()
+                else:
+                    songs = songs.split('@')      
             else:
-                songs = songs.split('@')      
-        else:
-            if '@' not in songs:
-                songs = songs.strip().replace('\n','').replace('/','')
-            else:
-                songs = songs.split('@')
-        numSong = numSong + 1
-        sn.append(songs)
+                if '@' not in songs:
+                    songs = songs.strip().replace('\n','').replace('/','')
+                else:
+                    songs = songs.split('@')
+            numSong = numSong + 1            
+            sn.append(songs)
+            
     print("There are %s songs in the file provided" % numSong)
     print("The download should take about %s minute(s) and %s seconds" % (((numSong*10+120)//60), ((numSong*10+120)%60)))
     a = input("Press Enter to Begin Download...")
@@ -155,22 +157,34 @@ def list_download(isHistory):
     print("There are %s songs in the file provided" % numSong)
     print("The download should take about %s minute(s) and %s seconds" % (((numSong*10+120)//60), ((numSong*10+120)%60)))
     print("Beginning download...\n")
-    for songs in sn:    
+    
+    for songs in sn:
+        if "feat." in songs:
+            songs = songs.split('(')[0]    
         delay = True
+        ts = True
         if type(songs) != type(sn):
-            if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % songs) == False:
+            if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % songs.strip()) == False:
+                songs = songs.strip()
                 if "www.youtube.com" in songs:
                     thread = linkThread(a, songs, numSong)
                 else:
                     thread = nameThread(a, songs, songs, numSong)
             else:
+                print("The song '%s.mp3' is already downloaded" % songs)
+                finishedDownload = finishedDownload + 1
                 delay = False
+                ts = False
         else:
             if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % songs[0].strip()):
+                print("The song '%s.mp3' is already downloaded" % songs)
+                finishedDownload = finishedDownload + 1
                 delay = False
-            thread = linkThread(songs[0].strip(), songs[1].strip(), numSong)
-                   
-        thread.start()
+                ts = False
+            else:
+                thread = linkThread(songs[0].strip(), songs[1].strip(), numSong)
+        if ts:                   
+            thread.start()
         if delay:
             time.sleep(CONST.WAIT())
         a = a + 1
@@ -185,12 +199,15 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries):
         if song == "":
             song = user_input('Enter the song name: ')  # get the song name from user
         if song in previouslyDownloaded:
+            print("Song was previously downloaded, using stored URL")
             downloadLinkOnly = previouslyDownloaded[previouslyDownloaded.index(song)+1]
             if "youtubeinmp3" not in downloadLinkOnly:
                 downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + downloadLinkOnly
         succ = True
+        if "feat." in song:
+            song = song.split('(')[0]
             # try to get the search result and exit upon error
-        if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % song) == False:         
+        if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % song) == False or song not in previouslyDownloaded:         
             if downloadLinkOnly == "":
                 try:
                     print("Searching for %s..." % song)
@@ -216,19 +233,21 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries):
                     retrieve(downloadLinkOnly, filename=CONST.DIRECTORY() + '\%s.mp3' % song)
                     cleanup  # clear the cache created by urlretrieve
                     x = True
-                    print("The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY() + "\%s.mp3" % song)/1048576, 1)))
+                    print("The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY() + "\%s.mp3" % song)/1048576, 1)), end = "")
                     if getSize (CONST.DIRECTORY() + "\%s.mp3" % song) < 1048576:
-                        print("%s downloaded incorrectly" % song)
+                        print("- Downloaded incorrectly")
                         os.remove(CONST.DIRECTORY() + "\%s.mp3" % song)
                         single_name_download(song, numSongs, downloadLinkOnly, retries + 1)
                         x = False
                         time.sleep(CONST.WAIT()*2)
                 except:
                     print(' - Error downloading %s' % song)
-                    os.remove(CONST.DIRECTORY() + "\%s.mp3" % song)
+                    single_name_download(song, numSongs, downloadLinkOnly, retries + 1)
+                    x = False
+                    time.sleep(CONST.WAIT()*2)
                 if x:
                     finishedDownload = finishedDownload + 1
-                    print("   - %s Download Successful" % song)        
+                    print(" - Download Successful")        
                     print("%s / %s Songs downloaded" % (finishedDownload, numSongs))
                     if song not in previouslyDownloaded:            
                         file = open(CONST.LOG(), "a")
@@ -270,19 +289,21 @@ def link_download(youtubeLink, retries, song, numSongs):
                 retrieve(downloadLinkOnly, filename=CONST.DIRECTORY() + '\%s.mp3' % song)
                 cleanup  # clear the cache created by urlretrieve
                 x = True
-                print("The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY() + "\%s.mp3" % song)/1048576, 1)))
+                print("The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY() + "\%s.mp3" % song)/1048576, 1)), end="")
                 if getSize (CONST.DIRECTORY() + "\%s.mp3" % song) < 1048576:
-                    print("%s downloaded incorrectly" % song)
+                    print(" - Downloaded incorrectly")
                     os.remove(CONST.DIRECTORY() + "\%s.mp3" % song)
                     link_download(youtubeLink, retries + 1, song, numSongs)
                     x = False
                     time.sleep(CONST.WAIT()*2)
             except:
                 print(' - Error downloading %s' % song)
-                os.remove("%s.mp3" % song)
+                single_name_download(song, numSongs, downloadLinkOnly, retries + 1)
+                x = False
+                time.sleep(CONST.WAIT()*2)
             if x:
                 finishedDownload = finishedDownload + 1
-                print("   - %s Download Successful" % song)        
+                print(" - Download Successful")        
                 print("%s / %s Songs downloaded" % (finishedDownload, numSongs))
                 if song in previouslyDownloaded:
                     file = open(CONST.LOG(), "a")
@@ -304,9 +325,10 @@ def getHistory():
     global previouslyDownloaded 
     songLog = open(CONST.LOG(), 'r')
     for songLink in songLog:
-        sl = songLink.split('@')
-        previouslyDownloaded.append(sl[0].strip())
-        previouslyDownloaded.append(sl[1].strip())
+        if songLink.strip() != "": 
+            sl = songLink.split('@')
+            previouslyDownloaded.append(sl[0].strip())
+            previouslyDownloaded.append(sl[1].strip())
         
 def printHistory():
     global previouslyDownloaded
