@@ -37,14 +37,13 @@ for x in range(2006,2016):
             sn = ""
             for songWord in songName:
                 sn = "%s%s " % (sn, songWord.capitalize())
-            print(sn.strip(), end=" - ")
             artist = s2[1].split('"Artist Name">')
             if '</h3>' in artist[0]:
-                artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace("&amp;","&").replace("&quot;",'"')
+                artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
             else:
-                artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace("&amp;","&").replace("&quot;",'"')
-            print(artist[:len(artist)-2])
-            file.write("%s - %s\n" % (sn.strip(), artist[:len(artist)-2]))
+                artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+            artist = artist[:len(artist)-2].replace(" Featuring ", ";")
+            file.write("%s - %s\n" % (artist, sn.strip()))
         file.close()
     else:
         print("Top100-%s.txt Already Exists." % x)
@@ -61,9 +60,10 @@ for y in range (1,101):
         sn = "%s%s " % (sn, songWord.capitalize())
     artist = s2[1].split('"Artist Name">')
     if '</h3>' in artist[0]:
-        artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace("&amp;","&").replace("&quot;",'"')
+        artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
     else:
-        artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace("&amp;","&").replace("&quot;",'"')
-    file.write("%s - %s\n" % (sn.strip(), artist[:len(artist)-2]))
+        artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+    artist = artist[:len(artist)-2].replace(" Featuring ", ";")
+    file.write("%s - %s\n" % (artist, sn.strip()))
 file.close()
 print("Top100 Updated.")
