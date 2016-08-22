@@ -2,17 +2,12 @@
 # A python to download a song or a list of songs.
 # create by Aman Roy
 # Creation Date : 18-Feb-2016
-# Python version used : - Python 3.4.3+ (ported for python2)
+# Python version used : - Python 3.4.3+
 # Please use right spelling to avoid errors
 # All licence belongs to authour.
 
 # import all the library used
-import re
-import urllib
-import os
-import sys
-import threading
-import time
+import re, urllib, os, sys, threading, time
 
 class _Const(object):
     def RETRIES():
@@ -23,6 +18,8 @@ class _Const(object):
         return 2
     def LOG():
         return "SongLog.txt"
+    def MP3():
+        return 0
 
 global finishedDownload
 finishedDownload = 0
@@ -32,24 +29,56 @@ previouslyDownloaded = []
 # determine python version
 CONST = _Const
 getSize = os.path.getsize
-version = sys.version_info[0]
-# set user_input for correct version of python
-if version == 2:  # python 2.x
-    user_input = raw_input
-    import urllib2
-    urlopen = urllib2.urlopen  # open a url
-    encode = urllib.urlencode  # encode a search line
-    retrieve = urllib.urlretrieve  # retrieve url info
-    cleanup = urllib.urlcleanup()  # cleanup url cache
-else:  # python 3.x
-    user_input = input
-    import urllib.request
-    import urllib.parse
-    urlopen = urllib.request.urlopen
-    encode = urllib.parse.urlencode
-    retrieve = urllib.request.urlretrieve
-    cleanup = urllib.request.urlcleanup()
+user_input = input
+import urllib.request
+import urllib.parse
+urlopen = urllib.request.urlopen
+encode = urllib.parse.urlencode
+retrieve = urllib.request.urlretrieve
+cleanup = urllib.request.urlcleanup()
 
+def updateTop100():
+    for x in range(2006,2016):
+        if os.path.isfile("Top100-%s.txt" % x) == False:  
+            file = open("Top100-%s.txt" % x, "w")    
+            webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()            
+            songs = str(webpage).split('<h2 class="chart-row__song">')
+            for y in range (1,101):
+                s2 = songs[y].split('</h2>')
+                songName = s2[0].replace("&#039;", "'").lower().replace("&amp;","&").replace("&quot;",'"').split()
+                sn = ""
+                for songWord in songName:
+                    sn = "%s%s " % (sn, songWord.capitalize())
+                artist = s2[1].split('"Artist Name">')
+                if '</h3>' in artist[0]:
+                    artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+                else:
+                    artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+                artist = artist[:len(artist)-2].replace(" Featuring ", ";")
+                file.write("%s - %s\n" % (artist, sn.strip()))
+            file.close()
+        else:
+            #print("Top100-%s.txt Already Exists." % x)
+            pass
+            
+    file = open("Top100.txt", "w")    
+    webpage = urlopen("http://www.billboard.com/charts/hot-100").read()
+    songs = str(webpage).split('<h2 class="chart-row__song">')
+    
+    for y in range (1,101):
+        s2 = songs[y].split('</h2>')
+        songName = s2[0].replace("&#039;", "'").lower().replace("&amp;","&").replace("&quot;",'"').split()
+        sn = ""
+        for songWord in songName:
+            sn = "%s%s " % (sn, songWord.capitalize())
+        artist = s2[1].split('"Artist Name">')
+        if '</h3>' in artist[0]:
+            artist = artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+        else:
+            artist = artist[1].split("</a>")[0].replace('"','')[3:].strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+        artist = artist[:len(artist)-2].replace(" Featuring ", ";")
+        file.write("%s - %s\n" % (artist, sn.strip()))
+    file.close()
 
 # clear the terminal screen
 def screen_clear():
@@ -87,7 +116,7 @@ def prompt():
     [5] Download all of your previously downloaded Songs
     Press any other key from keyboard to exit''')
     
-    choice = user_input('>>> ')
+    choice = input('>>> ')
     return str(choice)
 
 class nameThread (threading.Thread):
@@ -107,7 +136,13 @@ class linkThread (threading.Thread):
         self.youtubeLink = youtubeLink
         self.numSongs = numSongs
     def run(self):
-        link_download(self.youtubeLink, 0, self.threadID, self.numSongs)           
+        link_download(self.youtubeLink, 0, self.threadID, self.numSongs)        
+        
+class update100Thread (threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+    def run(self):
+        updateTop100()
                 
 # download from a list
 def list_download(isHistory):  
@@ -115,7 +150,7 @@ def list_download(isHistory):
     if isHistory:
         fileName = CONST.LOG()        
     else:          
-        fileName = user_input('Please enter the File Name With extension (i.e. ".txt")')  # get the file name to be opened
+        fileName = input('Please enter the File Name With extension (i.e. ".txt")')  # get the file name to be opened
     a = 0
     numSong = 0
     # find the file and set fhand as handler
@@ -197,12 +232,16 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries):
     global previouslyDownloaded
     if retries < CONST.RETRIES():
         if song == "":
-            song = user_input('Enter the song name: ')  # get the song name from user
+            song = input('Enter the song name: ')  # get the song name from user
         if song in previouslyDownloaded:
             print("Song was previously downloaded, using stored URL")
             downloadLinkOnly = previouslyDownloaded[previouslyDownloaded.index(song)+1]
-            if "youtubeinmp3" not in downloadLinkOnly:
-                downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + downloadLinkOnly
+            if CONST.MP3() == 1:
+                if "yt-mp3" not in downloadLinkOnly:
+                    downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + downloadLinkOnly
+            elif CONST.MP3() == 0:
+                if "youtubeinmp3" not in downloadLinkOnly:
+                    downloadLinkOnly = "http://www.youtubeinmp3.com/fetch/?video=" + downloadLinkOnly
         succ = True
         if "feat." in song:
             song = song.split('(')[0]
@@ -225,8 +264,10 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries):
                 # generate a download link that can be used to get the audio file using youtube2mp3 API
                 x = False                
                 if downloadLinkOnly == "":
-                    downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + 'http://www.youtube.com/watch?v=' + search_results[0]
-                    #downloadLinkOnly = "http://serve01.mp3skull.onl/get?id=" + search_results[0]
+                    if CONST.MP3() == 0:
+                        downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + 'http://www.youtube.com/watch?v=' + search_results[0]
+                    elif CONST.MP3() == 1:
+                        downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + 'http://www.youtube.com/watch?v=' + search_results[0]                    
                 try:
                     print(' - Downloading %s' % song)
                     # code a progress bar for visuals? this way is more portable than wget
@@ -270,7 +311,7 @@ def link_download(youtubeLink, retries, song, numSongs):
         if youtubeLink == "":
             print('Enter full youtube link (case sensitive)')
             print('e.g. - https://www.youtube.com/watch?v=rYEDA3JcQqw')
-            youtubeLink = user_input('>>> ')
+            youtubeLink = input('>>> ')
         succ = True
         if song == "":
             print("Searching for song Title..." )
@@ -279,10 +320,17 @@ def link_download(youtubeLink, retries, song, numSongs):
         if os.path.isfile(CONST.DIRECTORY() + "\%s.mp3" % song) == False:         
             # generate a download link that can be used to get the audio file using youtube2mp3 API
             x = False                
-            if 'http://www.youtubeinmp3.com/fetch/?video=' not in youtubeLink:
-                downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + youtubeLink
-            else:
-                downloadLinkOnly = youtubeLink
+            if CONST.MP3() == 0:           
+                print("using youtubeinmp3")
+                if 'youtubeinmp3' not in youtubeLink:
+                    downloadLinkOnly = "http://www.youtubeinmp3.com/fetch/?video=" + youtubeLink
+                else:
+                    downloadLinkOnly = youtubeLink
+            elif CONST.MP3() == 1:
+                if 'yt-mp3' not in youtubeLink:
+                    downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + youtubeLink
+                else:
+                    downloadLinkOnly = youtubeLink
             try:
                 print(' - Downloading %s' % song)
                 # code a progress bar for visuals? this way is more portable than wget
@@ -341,6 +389,8 @@ def printHistory():
 # main guts of the program
 def main():    
     finishedDownload = 0
+    thread = update100Thread()
+    thread.start()    
     if not os.path.exists(CONST.DIRECTORY()):
         os.makedirs(CONST.DIRECTORY())
     if not os.path.exists(CONST.LOG()):
