@@ -36,6 +36,8 @@ global previouslyDownloaded
 previouslyDownloaded = []
 global downloadErrors
 downloadErrors = []
+global totalFileDownloadSize
+totalFileDownloadSize = 0
 
 # 
 CONST = _Const
@@ -123,7 +125,7 @@ def print_format_table():
 
 # find out what the user wants to do
 def prompt():
-    # userr prompt to ask mode
+    # user prompt to ask mode
     print (bcolors.WHITE + '''Select A mode  
     [1] Download from direct entry
     [2] Download from a list
@@ -144,7 +146,12 @@ class nameThread (threading.Thread):
         self.songName = songName
         self.numSong = numSong
     def run(self):
-        single_name_download(self.songName, self.numSong, "", 0, False)     
+        try:
+            single_name_download(self.songName, self.numSong, "", 0, False)
+        except KeyboardInterrupt:
+            os.remove(CONST.DIRECTORY + "\%s.mp3" % self.songName)
+            exit(0)
+                 
         
 class update100Thread (threading.Thread):
     def __init__(self):
@@ -243,6 +250,7 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
     global finishedDownload
     global previouslyDownloaded
     global downloadErrors        
+    global totalFileDownloadSize
     if retries < CONST.RETRIES:
         if song == "":
             if isYoutubeDownload: 
@@ -297,11 +305,14 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
                     cleanup  # clear the cache created by urlretrieve
                     x = True
                     printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY + "\%s.mp3" % song)/1048576, 1)))
-                    if getSize (CONST.DIRECTORY + "\%s.mp3" % song) < 1048576:                        
+                    fileSize = getSize(CONST.DIRECTORY + "\%s.mp3" % song) 
+                    if fileSize < 1048576:                        
                         os.remove(CONST.DIRECTORY + "\%s.mp3" % song)
                         single_name_download(song, numSongs, downloadLinkOnly, retries + 1, False)
                         x = False
                         time.sleep(CONST.WAIT*2)
+                    else : 
+                        totalFileDownloadSize = totalFileDownloadSize + fileSize 
                 except:
                     printProgress(finishedDownload, numSongs, "", bcolors.RED + 'Error downloading %s' % song)
                     single_name_download(song, numSongs, downloadLinkOnly, retries + 1, False)
@@ -334,6 +345,8 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
 def printProgress (iteration, total, prefix = '', suffix = '', decimals = 1, barLength = 75):
     global finishedDownload
     global downloadErrors    
+    global numberOfSongsGlobal
+    global totalFileDownloadSize
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -352,17 +365,20 @@ def printProgress (iteration, total, prefix = '', suffix = '', decimals = 1, bar
     print(bcolors.WHITE + '\r%s |%s| %s%s \n%s' % (prefix, bar, percents, '%', suffix), end = ""),    
     print()
     if iteration == total:
-        print(bcolors.WHITE + "Errors:" + bcolors.RED)
+        print(bcolors.WHITE + "Total of %sMb Downloaded" % "{0:.2f}".format(totalFileDownloadSize/1048576))
+        if len(downloadErrors) != 0:
+            print("Errors:" + bcolors.RED)
         for errors in downloadErrors:
             print(errors)    
         if len(downloadErrors) != 0:        
             print(bcolors.RED + "\nThere were %s errors in the download process" % len(downloadErrors))
             print("Try downloading them individually, or with a different name format")
             input(bcolors.WHITE + "Press Enter To Continue")
-            finishedDownload = finishedDownload + 1
+            numberOfSongsGlobal = 0
             screen_clear()
         else :
             print(bcolors.GREEN + "There were no errors! :)")
+            input()
                 
 
 
@@ -372,6 +388,7 @@ def exit(code):
 
 def getHistory():
     global previouslyDownloaded 
+    previouslyDownloaded = []
     songLog = open(CONST.LOG, 'r')
     for songLink in songLog:
         if songLink.strip() != "": 
@@ -437,6 +454,13 @@ def main():
                         list_download(True)
                     elif choice == '6':                
                         printHistory()
+                        input()
+                    elif choice == '7':
+                        alls = os.listdir(CONST.DIRECTORY)
+                        totalSize = 0
+                        for sng in alls:
+                            totalSize = totalSize + getSize(CONST.DIRECTORY + "\%s" % sng)/1048576
+                        print("There are %s songs totalling to %s Mb of .mp3 files." % (len(alls), "{0:.2f}".format(totalSize)))
                         input()
                     else:
                         Continue = False
