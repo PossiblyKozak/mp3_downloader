@@ -21,11 +21,12 @@ class bcolors:
 class _Const(object):
     RETRIES = 5                 # Total number of retries the program undergoes before giving up 
     DIRECTORY = "Songs"         # The subdirectory name in which all the downloaded mp3's will reside.
-    WAIT = 2                    # Seconds of delay between the initialization of seperate threads.
+    WAIT = 4                    # Seconds of delay between the initialization of seperate threads.
     LOG = "SongLog.txt"         # The name of the Log file in whichh all songs will have their url's saved.
     MP3 = 0                # Determining the website to use when downloadin the song. Sometimes one will be down.
     ERROR = "Errors.txt"
-    SONGLISTDIR = "SongLists"   
+    SONGLISTDIR = "SongLists" 
+    SUBDIR = ""  
 
 
 global finishedDownload 
@@ -207,7 +208,12 @@ def list_download(isHistory):
     numberOfSongsGlobal = numSong
     print(bcolors.YELLOW + "There are %s songs in the file provided" % numSong)
     print("The download should take about %s minute(s) and %s seconds" % (((numSong*10+120)//60), ((numSong*10+120)%60)))
-    input(bcolors.WHITE +"Press Enter to Begin Download...")
+    if input(bcolors.WHITE + "Would you like to create a subfolder for this group of songs? (y/n)\n>>> ") == "y":
+        subFolder = input("Enter the name of the folder\n>>>") 
+        if not os.path.exists(CONST.DIRECTORY + "\%s" % subFolder):
+            os.makedirs("%s\%s" % (CONST.DIRECTORY, subFolder))
+        CONST.SUBDIR = '\\%s' % subFolder
+    input("Press Enter to Begin Download...")
     a = 0
     #screen_clear()
     try:
@@ -217,7 +223,7 @@ def list_download(isHistory):
             delay = True
             ts = True
             if type(songs) != type(sn):            
-                if os.path.isfile(CONST.DIRECTORY + "\%s.mp3" % songs.strip()) == False:
+                if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs.strip()) == False:
                     songs = songs.strip()
                     if "www.youtube.com" in songs:
                         thread = linkThread(a, songs, numSong)
@@ -229,7 +235,7 @@ def list_download(isHistory):
                     delay = False
                     ts = False
             else:
-                if os.path.isfile(CONST.DIRECTORY + "\%s.mp3" % songs[0].strip()):
+                if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs[0].strip()):
                     finishedDownload = finishedDownload + 1
                     printProgress(finishedDownload, numSong, "", bcolors.YELLOW + "The song '%s.mp3' is already downloaded" % songs)     
                     delay = False
@@ -279,7 +285,7 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
         if "feat." in song:
             song = song.split('(')[0]
             # try to get the search result and exit upon error
-        if os.path.isfile(CONST.DIRECTORY + "\%s.mp3" % song) == False or song not in previouslyDownloaded:         
+        if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song) == False or song not in previouslyDownloaded:         
             if downloadLinkOnly == "":
                 try:
                     printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Searching for %s..." % song)
@@ -299,15 +305,15 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
                     elif CONST.MP3 == 1:
                         downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + 'http://www.youtube.com/watch?v=' + search_results[0]                    
                 try:
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Downloading %s" % song)
+                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Downloading %s (retry %s of %s)" % (song,retries, CONST.RETRIES))
                     # code a progress bar for visuals? this way is more portable than wget
-                    retrieve(downloadLinkOnly, filename=CONST.DIRECTORY + '\%s.mp3' % song)
+                    retrieve(downloadLinkOnly, filename=CONST.DIRECTORY + CONST.SUBDIR + '\%s.mp3' % song)
                     cleanup  # clear the cache created by urlretrieve
                     x = True
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY + "\%s.mp3" % song)/1048576, 1)))
-                    fileSize = getSize(CONST.DIRECTORY + "\%s.mp3" % song) 
+                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song)/1048576, 1)))
+                    fileSize = getSize(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song) 
                     if fileSize < 1048576:                        
-                        os.remove(CONST.DIRECTORY + "\%s.mp3" % song)
+                        os.remove(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song)
                         single_name_download(song, numSongs, downloadLinkOnly, retries + 1, False)
                         x = False
                         time.sleep(CONST.WAIT*2)
@@ -420,7 +426,8 @@ def printHistory():
 def main():         
     global finishedDownload
     global numberOfSongsGlobal
-    global downloadErrors
+    global downloadErrors    
+    global totalFileDownloadSize
     Continue = True
     finishedDownload = 0
     thread = update100Thread()
@@ -435,9 +442,11 @@ def main():
     while Continue:
         if finishedDownload == numberOfSongsGlobal + 1 or numberOfSongsGlobal == 0:
             try:
+                CONST.SUBDIR = ""
                 downloadErrors = []
                 finishedDownload = 0
                 numberOfSongsGlobal = 0
+                totalFileDownloadSize = 0
                 screen_clear()
                 getHistory()
                 choice = prompt()        
