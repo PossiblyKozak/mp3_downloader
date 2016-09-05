@@ -28,6 +28,56 @@ class _Const(object):
     SONGLISTDIR = "SongLists" 
     SUBDIR = ""  
 
+def changeSettings():
+    staySettings = True
+    while staySettings:
+        screen_clear()
+        print("Settings:")
+        print(" [0] Number of Retries : %s" % CONST.RETRIES)
+        print(" [1] Default Download Directory : %s" % CONST.DIRECTORY)
+        print(" [2] Seconds of delay between downloads : %s" % CONST.WAIT)
+        print(" [3] Previous song log file : %s" % CONST.LOG)
+        print(" [4] Error file name : %s" % CONST.ERROR)
+        print(" [5] Folder for the text files : %s" % CONST.SONGLISTDIR)
+        print(" [x] Exit to main menu")
+        setIndex = input("Enter number of setting you want to change\n>>> ")
+        if setIndex == 'x':
+            staySettings = False
+            setSettings()
+        elif str.isdigit(setIndex) and int(setIndex) < 6:
+            newValue = input("Enter the new value\n>>> ")
+            if int(setIndex) == 0:
+                CONST.RETRIES = int(newValue)
+            elif int(setIndex) == 1:
+                os.rename(CONST.DIRECTORY, newValue)
+                CONST.DIRECTORY = newValue
+            elif int(setIndex) == 2:
+                CONST.WAIT = int(newValue)
+            elif int(setIndex) == 3:
+                os.rename(CONST.LOG, isTextFile(newValue))
+                CONST.LOG = isTextFile(newValue)
+            elif int(setIndex) == 4:
+                os.rename(CONST.ERROR, isTextFile(newValue))
+                CONST.ERROR = isTextFile(newValue)
+            elif int(setIndex) == 5:
+                os.rename(CONST.SONGLISTDIR, newValue)
+                CONST.SONGLISTDIR = newValue        
+    
+def isTextFile(inValue):
+    if ".txt" not in inValue:
+        inValue = inValue + ".txt"   
+    return inValue
+    
+def getSettings():
+    file = open("Settings.txt", "r")
+    sett = file.readline()
+    setlist = sett.split(',')
+    CONST.RETRIES = int(setlist[0].strip())
+    CONST.DIRECTORY = setlist[1].strip()
+    CONST.WAIT = int(setlist[2].strip())
+    CONST.LOG = setlist[3].strip()
+    CONST.ERROR = setlist[4].strip()
+    CONST.SONGLISTDIR = setlist[5].strip()
 
 global finishedDownload 
 finishedDownload = 0
@@ -106,7 +156,7 @@ def removeSpecialCaharacters(inputString):
 def video_title(url):
     try:
         webpage = urlopen(url).read()
-        title = str(webpage).split('<title>')[1].split('</title>')[0]
+        title = removeSpecialCaharacters(str(webpage).split('<title>')[1].split('</title>')[0])
     except:
         title = 'Youtube Song'
     return title
@@ -130,10 +180,10 @@ def prompt():
     print (bcolors.WHITE + '''Select A mode  
     [1] Download from direct entry
     [2] Download from a list
-    [3] Download from the youtube link
-    [4] Download from a list of youtube links
-    [5] Download all of your previously downloaded Songs
-    [6] List all previously downloaded songs
+    [3] Download all of your previously downloaded Songs
+    [4] List all previously downloaded songs
+    [5] Show count of all songs currently in the downloaded directory
+    [s] Change settings
     Press any other key from keyboard to exit''')
     #print_format_table()
     choice = input('>>> ')
@@ -218,6 +268,8 @@ def list_download(isHistory):
     #screen_clear()
     try:
         for songs in sn:
+            if '@https://' in songs:
+                pass
             if "feat." in songs:
                 songs = songs.split('(')[0]    
             delay = True
@@ -225,10 +277,7 @@ def list_download(isHistory):
             if type(songs) != type(sn):            
                 if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs.strip()) == False:
                     songs = songs.strip()
-                    if "www.youtube.com" in songs:
-                        thread = linkThread(a, songs, numSong)
-                    else:
-                        thread = nameThread(a, songs, songs, numSong)
+                    thread = nameThread(a, songs, songs, numSong)
                 else:
                     finishedDownload = finishedDownload + 1
                     printProgress(finishedDownload, numSong, "", bcolors.YELLOW + "The song '%s.mp3' is already downloaded" % songs)             
@@ -241,7 +290,7 @@ def list_download(isHistory):
                     delay = False
                     ts = False
                 else:
-                    thread = linkThread(songs[0].strip(), songs[1].strip(), numSong)
+                    thread = nameThread(a, songs[0].strip(), songs[1].strip(), numSong)
             if ts:                   
                 thread.start()
             if delay:
@@ -259,13 +308,8 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
     global totalFileDownloadSize
     if retries < CONST.RETRIES:
         if song == "":
-            if isYoutubeDownload: 
-                print(bcolors.WHITE + 'Enter full youtube link (case sensitive)')
-                print('e.g. - https://www.youtube.com/watch?v=rYEDA3JcQqw')
-                song = input('>>> ')
-            else:
-                print(bcolors.WHITE + 'Enter the song name: ')  # get the song name from user
-                song = input('>>> ')
+            print(bcolors.WHITE + 'Enter the song name or full youtube link: ')  # get the song name from user
+            song = input('>>> ')
         if song in previouslyDownloaded:
             print(bcolors.PINK + "Song was previously downloaded, using stored URL")
             downloadLinkOnly = previouslyDownloaded[previouslyDownloaded.index(song)+1]
@@ -305,7 +349,7 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
                     elif CONST.MP3 == 1:
                         downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + 'http://www.youtube.com/watch?v=' + search_results[0]                    
                 try:
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Downloading %s (retry %s of %s)" % (song,retries, CONST.RETRIES))
+                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Downloading %s (Retry %s of %s)" % (song,retries, CONST.RETRIES))
                     # code a progress bar for visuals? this way is more portable than wget
                     retrieve(downloadLinkOnly, filename=CONST.DIRECTORY + CONST.SUBDIR + '\%s.mp3' % song)
                     cleanup  # clear the cache created by urlretrieve
@@ -419,8 +463,11 @@ def printHistory():
                 color = 35
             print(titles, end='|\x1b[0;%s;40m' % color)
                         
-    print()
-        
+    print()       
+
+def setSettings():
+    file = open("Settings.txt", "w")
+    file.write("%s, %s, %s, %s, %s, %s" % (str(CONST.RETRIES), CONST.DIRECTORY, str(CONST.WAIT), CONST.LOG, CONST.ERROR, CONST.SONGLISTDIR))
 
 # main guts of the program
 def main():         
@@ -430,8 +477,6 @@ def main():
     global totalFileDownloadSize
     Continue = True
     finishedDownload = 0
-    thread = update100Thread()
-    thread.start()       
     if not os.path.exists(CONST.DIRECTORY):
         os.makedirs(CONST.DIRECTORY)
     if not os.path.exists(CONST.SONGLISTDIR):
@@ -439,6 +484,12 @@ def main():
     if not os.path.exists(CONST.LOG):
         file = open(CONST.LOG, "w")
         file.close()
+    if not os.path.exists("Settings.txt"):
+        setSettings()
+    else:
+        getSettings()
+    thread = update100Thread()
+    thread.start()       
     while Continue:
         if finishedDownload == numberOfSongsGlobal + 1 or numberOfSongsGlobal == 0:
             try:
@@ -456,21 +507,27 @@ def main():
                     elif choice == '2':                
                         list_download(False)
                     elif choice == '3':
-                        single_name_download("", 1, "", 0, True)
-                    elif choice == '4':
-                        list_download(False)
-                    elif choice == '5':
                         list_download(True)
-                    elif choice == '6':                
+                    elif choice == '4':                
                         printHistory()
                         input()
-                    elif choice == '7':
+                    elif choice == '5':
                         alls = os.listdir(CONST.DIRECTORY)
                         totalSize = 0
+                        totalCount = 0
                         for sng in alls:
-                            totalSize = totalSize + getSize(CONST.DIRECTORY + "\%s" % sng)/1048576
-                        print("There are %s songs totalling to %s Mb of .mp3 files." % (len(alls), "{0:.2f}".format(totalSize)))
+                            if os.path.isdir(os.path.join(CONST.DIRECTORY, sng)):
+                                suballs = os.listdir(os.path.join(CONST.DIRECTORY, sng))
+                                for subsng in suballs:
+                                    totalSize = totalSize + getSize(os.path.join(CONST.DIRECTORY, sng) + "\%s" % subsng)/1048576
+                                    totalCount = totalCount + 1
+                            else:
+                                totalSize = totalSize + getSize(CONST.DIRECTORY + "\%s" % sng)/1048576
+                                totalCount = totalCount + 1
+                        print("There are %s songs totalling to %s Mb of .mp3 files." % (totalCount, "{0:.2f}".format(totalSize)))
                         input()
+                    elif choice == 's':
+                        changeSettings()
                     else:
                         Continue = False
                         screen_clear()
