@@ -184,6 +184,7 @@ def prompt():
     [4] List all previously downloaded songs
     [5] Show count of all songs currently in the downloaded directory
     [6] Youtube Playlist Downloader 
+    [7] Search History
     [s] Change settings
     Press any other key from keyboard to exit''')
     #print_format_table()
@@ -463,28 +464,30 @@ def getHistory():
             previouslyDownloaded.append(sl[0].strip())
             previouslyDownloaded.append(sl[1].strip())
         
-def printHistory():
+def printHistory(search):
     global previouslyDownloaded
     x = 0
     color = 30
     for titles in previouslyDownloaded:
         if 'www.youtube.com' not in titles:
-            color = color + 1
-            x = x + len(titles) + 5
-            if x > 180:
-                print()
-                x = 0
-            if color > 37:
-                color = 31
-            if color == 34:
-                color = 35
-            print(titles, end='|\x1b[0;%s;40m' % color)
+            if search.lower() in titles.lower():
+                color = color + 1
+                x = x + len(titles) + 5
+                if x > 180:
+                    print()
+                    x = 0
+                if color > 37:
+                    color = 31
+                if color == 34:
+                    color = 35
+                print(titles, end='|\x1b[0;%s;40m' % color)
                         
     print()       
 
 def setSettings():
     file = open("Settings.txt", "w")
     file.write("%s, %s, %s, %s, %s, %s" % (str(CONST.RETRIES), CONST.DIRECTORY, str(CONST.WAIT), CONST.LOG, CONST.ERROR, CONST.SONGLISTDIR))
+    
 
 # main guts of the program
 def main():         
@@ -526,7 +529,7 @@ def main():
                     elif choice == '3':
                         list_download(True)
                     elif choice == '4':                
-                        printHistory()
+                        printHistory("")
                         input()
                     elif choice == '5':
                         alls = os.listdir(CONST.DIRECTORY)
@@ -545,6 +548,10 @@ def main():
                         input()
                     elif choice == '6':
                         youTubePlaylistDownloader()
+                    elif choice == '7':
+                        search = input("Enter search term\n>>> ")
+                        printHistory(search)
+                        input()
                     elif choice == 's':
                         changeSettings()
                     else:
