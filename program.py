@@ -183,11 +183,28 @@ def prompt():
     [3] Download all of your previously downloaded Songs
     [4] List all previously downloaded songs
     [5] Show count of all songs currently in the downloaded directory
+    [6] Youtube Playlist Downloader 
     [s] Change settings
     Press any other key from keyboard to exit''')
     #print_format_table()
     choice = input('>>> ')
     return str(choice)
+
+def youTubePlaylistDownloader():
+    url = input("Enter the youtube playlist url: ")
+    fileName = input("Enter a file Name: ")
+    webpage = urlopen(url).read()
+
+    videos = str(webpage).split('data-video-id="')
+    file = open(CONST.SONGLISTDIR + "\%s.txt" % fileName, "w")
+    for url in videos[1:len(videos)-1]:   
+        rule = url.split('"')
+        title = url.split('data-title="')[1].split('"')[0].replace('[Copyright Free]','').replace('&amp;', '&').replace("\xe2\x80\x93", "-").replace("\xc3\xbc","u").replace("&#39;","'").replace("\xe2\x80\x93", "'")
+        finalURL = "https://www.youtube.com/watch?v=" + rule[0]
+        printed = "%s@%s\n" %(title.strip(),finalURL)
+        file.write(printed)
+    file.close()
+    
 
 class nameThread (threading.Thread):
     def __init__(self, threadID, name, songName, numSong):
@@ -526,6 +543,8 @@ def main():
                                 totalCount = totalCount + 1
                         print("There are %s songs totalling to %s Mb of .mp3 files." % (totalCount, "{0:.2f}".format(totalSize)))
                         input()
+                    elif choice == '6':
+                        youTubePlaylistDownloader()
                     elif choice == 's':
                         changeSettings()
                     else:
