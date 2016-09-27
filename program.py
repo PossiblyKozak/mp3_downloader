@@ -8,7 +8,18 @@
 # import all the libraries used
 import re, urllib, os, sys, threading, time, urllib.request, urllib.parse
 
-class bcolors:
+global finishedDownload         # Number of songs which are currently finished downloading 
+finishedDownload = 0
+global numberOfSongsGlobal      # The number of songs in the list of songs to be downloaded
+numberOfSongsGlobal = 0
+global previouslyDownloaded     # An array of names of sings which have already been downloaded
+previouslyDownloaded = []
+global downloadErrors           # Any errors which occur in the download process are added to this array
+downloadErrors = []
+global totalFileDownloadSize    # total filesize (in Mb) downloaded in this batch of files
+totalFileDownloadSize = 0
+
+class bcolors:                  #Creation of a color class for the text in the console
     RED = '\x1b[0;31;40m'
     GREEN = '\x1b[0;32;40m'
     YELLOW = '\x1b[0;33;40m'
@@ -18,18 +29,50 @@ class bcolors:
     WHITE = '\x1b[0;37;40m'
 
 # Creation of a constant class, so that mass changes in the code can be done.
+# These can now be changed from the settings in the client
 class _Const(object):
     RETRIES = 5                 # Total number of retries the program undergoes before giving up 
     DIRECTORY = "Songs"         # The subdirectory name in which all the downloaded mp3's will reside.
     WAIT = 4                    # Seconds of delay between the initialization of seperate threads.
     LOG = "SongLog.txt"         # The name of the Log file in whichh all songs will have their url's saved.
-    MP3 = 0                # Determining the website to use when downloadin the song. Sometimes one will be down.
-    ERROR = "Errors.txt"
-    SONGLISTDIR = "SongLists" 
-    SUBDIR = ""  
+    MP3 = 0                     # Determining the website to use when downloadin the song. Sometimes one will be down.
+    ERROR = "Errors.txt"        # Saves the Song Name and the attempted download URL in this file
+    SONGLISTDIR = "SongLists"   # The directory in which the program will look for .txt files constining song names
+    SUBDIR = ""                 # The subdirectory where the songs are currently being saved within the DIRECTORY folder
+    
+# Sends each song download off onto its own thread, to maximize the download capacity of the machine
+class nameThread (threading.Thread):
+    def __init__(self, threadID, name, songName, numSong):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.songName = songName
+        self.numSong = numSong
+    def run(self):
+        try:
+            single_name_download(self.songName, self.numSong, "", 0, False)
+        except KeyboardInterrupt:
+            os.remove(CONST.DIRECTORY + "\%s.mp3" % self.songName)
+            exit(0)
+                 
+# So that the updating of the top100's is done in the background
+class update100Thread (threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+    def run(self):
+        updateTop100()
+
+#Renaming a couple of things for ease of use (And capitalized constants)
+CONST = _Const 
+getSize = os.path.getsize
+user_input = input
+urlopen = urllib.request.urlopen
+encode = urllib.parse.urlencode
+retrieve = urllib.request.urlretrieve
+cleanup = urllib.request.urlcleanup()
 
 def changeSettings():
-    staySettings = True
+    staySettings = True # Flag for staying on the settings screen which is only turned off if the letter x is entered 
     while staySettings:
         screen_clear()
         print("Settings:")
@@ -41,10 +84,10 @@ def changeSettings():
         print(" [5] Folder for the text files : %s" % CONST.SONGLISTDIR)
         print(" [x] Exit to main menu")
         setIndex = input("Enter number of setting you want to change\n>>> ")
-        if setIndex == 'x':
+        if setIndex == 'x' or setIndex == 'X':  
             staySettings = False
             setSettings()
-        elif str.isdigit(setIndex) and int(setIndex) < 6:
+        elif str.isdigit(setIndex) and int(setIndex) < 6:   # if the str.isdigit wasn't there, the program would crash if a non-integer and not 'x' was entered
             newValue = input("Enter the new value\n>>> ")
             if int(setIndex) == 0:
                 CONST.RETRIES = int(newValue)
@@ -63,12 +106,12 @@ def changeSettings():
                 os.rename(CONST.SONGLISTDIR, newValue)
                 CONST.SONGLISTDIR = newValue        
     
-def isTextFile(inValue):
+def isTextFile(inValue):    # When setting the settings, some of the values have to be .txt files, this makes sure that file type is associated
     if ".txt" not in inValue:
         inValue = inValue + ".txt"   
     return inValue
     
-def getSettings():
+def getSettings():          # Opens the Settings.txt file, which contains all the 
     file = open("Settings.txt", "r")
     sett = file.readline()
     setlist = sett.split(',')
@@ -79,32 +122,12 @@ def getSettings():
     CONST.ERROR = setlist[4].strip()
     CONST.SONGLISTDIR = setlist[5].strip()
 
-global finishedDownload 
-finishedDownload = 0
-global numberOfSongsGlobal
-numberOfSongsGlobal = 0
-global previouslyDownloaded 
-previouslyDownloaded = []
-global downloadErrors
-downloadErrors = []
-global totalFileDownloadSize
-totalFileDownloadSize = 0
-
-# 
-CONST = _Const
-getSize = os.path.getsize
-user_input = input
-urlopen = urllib.request.urlopen
-encode = urllib.parse.urlencode
-retrieve = urllib.request.urlretrieve
-cleanup = urllib.request.urlcleanup()
-
-def updateTop100():    
+def updateTop100():         # Creates the top 100s and puts them in the song list directory
     for x in range(2006,2016):
         if os.path.isfile(CONST.SONGLISTDIR +  "\%s.txt" % x) == False:  
             file = open(CONST.SONGLISTDIR+  "\%s.txt" % x, "w")    
-            webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()            
-            songs = str(webpage).split('<h2 class="chart-row__song">')
+            webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()         # The Bilboard webiste simply changes the year in the URL in order to switch between years in the top100 lists.    
+            songs = str(webpage).split('<h2 class="chart-row__song">')                                        # The furthest it goes back is 2006
             for y in range (1,101):
                 s2 = songs[y].split('</h2>')
                 songName = removeSpecialCaharacters(s2[0]).split()
@@ -119,12 +142,9 @@ def updateTop100():
                 artist = artist[:len(artist)-2].replace(" Featuring ", ";")
                 file.write("%s - %s\n" % (artist, sn.strip()))
             file.close()
-        else:
-            #print("Top100-%s.txt Already Exists." % x)
-            pass
             
     file = open(CONST.SONGLISTDIR +  "\Top100.txt", "w")
-    webpage = urlopen("http://www.billboard.com/charts/hot-100").read()
+    webpage = urlopen("http://www.billboard.com/charts/hot-100").read() # This URL is the current top 100
     songs = str(webpage).split('<h2 class="chart-row__song">')
     
     for y in range (1,101):
@@ -138,7 +158,7 @@ def updateTop100():
             artist = removeSpecialCaharacters(artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:])
         else:
             artist = removeSpecialCaharacters(artist[1].split("</a>")[0].replace('"','')[3:])
-        artist = artist[:len(artist)-2].replace(" Featuring ", ";")
+        artist = artist[:len(artist)-2].replace(" Featuring ", ";")     # This makes the format the same as if you downloaded a spotify playlist from Spotlistr
         file.write("%s - %s\n" % (artist, sn.strip()))
     file.close()
 
@@ -149,8 +169,8 @@ def screen_clear():
     else:
         os.system('clear')
 
-def removeSpecialCaharacters(inputString):
-    return inputString.strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'')
+def removeSpecialCaharacters(inputString):  # Because this HTML parsing is shady at best
+    return inputString.strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'') 
 
 # function to retrieve video title from provided link
 def video_title(url):
@@ -161,7 +181,7 @@ def video_title(url):
         title = 'Youtube Song'
     return title
 
-def print_format_table():
+def print_format_table(): # For color purposes
     """
     prints table of formatted text format options
     """
@@ -174,9 +194,7 @@ def print_format_table():
             print (s1)
         print ('\n')
 
-# find out what the user wants to do
 def prompt():
-    # user prompt to ask mode
     print (bcolors.WHITE + '''Select A mode  
     [1] Download from direct entry
     [2] Download from a list
@@ -187,11 +205,10 @@ def prompt():
     [7] Search History
     [s] Change settings
     Press any other key from keyboard to exit''')
-    #print_format_table()
     choice = input('>>> ')
     return str(choice)
 
-def youTubePlaylistDownloader():
+def youTubePlaylistDownloader(): #Asks for a url for a youtube playlist, parses out the videos from said playlist and adds them to a text file that you name
     url = input("Enter the youtube playlist url: ")
     fileName = input("Enter a file Name: ")
     webpage = urlopen(url).read()
@@ -205,62 +222,43 @@ def youTubePlaylistDownloader():
         printed = "%s@%s\n" %(title.strip(),finalURL)
         file.write(printed)
     file.close()
-    
-
-class nameThread (threading.Thread):
-    def __init__(self, threadID, name, songName, numSong):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.name = name
-        self.songName = songName
-        self.numSong = numSong
-    def run(self):
-        try:
-            single_name_download(self.songName, self.numSong, "", 0, False)
-        except KeyboardInterrupt:
-            os.remove(CONST.DIRECTORY + "\%s.mp3" % self.songName)
-            exit(0)
-                 
-        
-class update100Thread (threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-    def run(self):
-        updateTop100()
                 
 # download from a list
 def list_download(isHistory):  
     global finishedDownload
     global numberOfSongsGlobal
-    numberOfSongsGlobal = 1
+    numberOfSongsGlobal = 1 # so that the main menu doesn't override the screen before the directory can be chosen
     a = 0
     numSong = 0
+    
     fileUnOpened = True
     while fileUnOpened:
         if isHistory:
-            fileName = CONST.LOG()        
+            fileName = CONST.LOG()  # if the download list is already defined, then dont bother asking for a file name.        
         else:          
             fileName = input('Please enter the name of the file in the "%s" folder: ' % CONST.SONGLISTDIR)  # get the file name to be opened
-        # find the file and set fhand as handler
         try:
             fhand = open(CONST.SONGLISTDIR + ("\%s" % fileName) + ".txt", 'r')
             print ('File opened successfully')
-            fileUnOpened = False;
+            fileUnOpened = False
         except IOError:
             print('File does not exist\n')
+            # loops until you enter a valid file
             
     sn = []
     screen_clear()
+
     if isHistory:
-        ph = input("Press h to print your history, or press any other characters to continue:")
+        ph = input("Press h to print your history, or press any other characters to continue:")     #Make the history visible so you can know what you're getting into
         if ph == 'h' or ph == 'H':
             screen_clear()
-            printHistory()
+            printHistory("")
         else:
-            screen_clear()    
+            screen_clear()   
+     
     for songs in fhand:        
         if songs.strip() != "":
-            if "www.youtube.com" in songs:
+            if "www.youtube.com" in songs: # This happens in the history as well as when getting list of youtube links. 
                 if '@' not in songs:
                     songs = songs.strip()
                 else:
@@ -447,8 +445,6 @@ def printProgress (iteration, total, prefix = '', suffix = '', decimals = 1, bar
         else :
             print(bcolors.GREEN + "There were no errors! :)")
             input()
-                
-
 
 # program exit
 def exit(code):
@@ -481,14 +477,12 @@ def printHistory(search):
                 if color == 34:
                     color = 35
                 print(titles, end='|\x1b[0;%s;40m' % color)
-                        
     print()       
 
 def setSettings():
     file = open("Settings.txt", "w")
     file.write("%s, %s, %s, %s, %s, %s" % (str(CONST.RETRIES), CONST.DIRECTORY, str(CONST.WAIT), CONST.LOG, CONST.ERROR, CONST.SONGLISTDIR))
     
-
 # main guts of the program
 def main():         
     global finishedDownload
@@ -497,6 +491,10 @@ def main():
     global totalFileDownloadSize
     Continue = True
     finishedDownload = 0
+    if not os.path.exists("Settings.txt"):
+        setSettings()
+    else:
+        getSettings()
     if not os.path.exists(CONST.DIRECTORY):
         os.makedirs(CONST.DIRECTORY)
     if not os.path.exists(CONST.SONGLISTDIR):
@@ -504,10 +502,6 @@ def main():
     if not os.path.exists(CONST.LOG):
         file = open(CONST.LOG, "w")
         file.close()
-    if not os.path.exists("Settings.txt"):
-        setSettings()
-    else:
-        getSettings()
     thread = update100Thread()
     thread.start()       
     while Continue:
