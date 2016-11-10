@@ -121,6 +121,15 @@ def getSettings():          # Opens the Settings.txt file, which contains all th
     CONST.LOG = setlist[3].strip()
     CONST.ERROR = setlist[4].strip()
     CONST.SONGLISTDIR = setlist[5].strip()
+    
+
+def printSettings():
+    print(CONST.RETRIES)
+    print(CONST.DIRECTORY)
+    print(CONST.WAIT)
+    print(CONST.LOG)
+    print(CONST.ERROR)
+    print(CONST.SONGLISTDIR)
 
 def updateTop100():         # Creates the top 100s and puts them in the song list directory
     for x in range(2006,2016):
@@ -224,53 +233,52 @@ def youTubePlaylistDownloader(): #Asks for a url for a youtube playlist, parses 
     file.close()
                 
 # download from a list
-def list_download(isHistory):  
+def list_download(isHistory, sn):  
     global finishedDownload
     global numberOfSongsGlobal
     numberOfSongsGlobal = 1 # so that the main menu doesn't override the screen before the directory can be chosen
     a = 0
     numSong = 0
-    
-    fileUnOpened = True
-    while fileUnOpened:
-        if isHistory:
-            fileName = CONST.LOG()  # if the download list is already defined, then dont bother asking for a file name.        
-        else:          
-            fileName = input('Please enter the name of the file in the "%s" folder: ' % CONST.SONGLISTDIR)  # get the file name to be opened
-        try:
-            fhand = open(CONST.SONGLISTDIR + ("\%s" % fileName) + ".txt", 'r')
-            print ('File opened successfully')
-            fileUnOpened = False
-        except IOError:
-            print('File does not exist\n')
-            # loops until you enter a valid file
-            
-    sn = []
-    screen_clear()
+    if (len(sn) == 0):
+        fileUnOpened = True
+        while fileUnOpened:
+            if isHistory:
+                fileName = CONST.LOG()  # if the download list is already defined, then dont bother asking for a file name.        
+            else:          
+                fileName = input('Please enter the name of the file in the "%s" folder: ' % CONST.SONGLISTDIR)  # get the file name to be opened
+            try:
+                fhand = open(CONST.SONGLISTDIR + ("\%s" % fileName) + ".txt", 'r')
+                print ('File opened successfully')
+                fileUnOpened = False
+            except IOError:
+                print('File does not exist\n')
+                # loops until you enter a valid file                
+        screen_clear()
 
-    if isHistory:
-        ph = input("Press h to print your history, or press any other characters to continue:")     #Make the history visible so you can know what you're getting into
-        if ph == 'h' or ph == 'H':
-            screen_clear()
-            printHistory("")
-        else:
-            screen_clear()   
-     
-    for songs in fhand:        
-        if songs.strip() != "":
-            if "www.youtube.com" in songs: # This happens in the history as well as when getting list of youtube links. 
-                if '@' not in songs:
-                    songs = songs.strip()
-                else:
-                    songs = songs.split('@')      
+        if isHistory:
+            ph = input("Press h to print your history, or press any other characters to continue:")     #Make the history visible so you can know what you're getting into
+            if ph == 'h' or ph == 'H':
+                screen_clear()
+                printHistory("")
             else:
-                if '@' not in songs:
-                    songs = songs.strip().replace('\n','').replace('/','')
+                screen_clear()   
+        
+        for songs in fhand:        
+            if songs.strip() != "":
+                if "www.youtube.com" in songs: # This happens in the history as well as when getting list of youtube links. 
+                    if '@' not in songs:
+                        songs = songs.strip()
+                    else:
+                        songs = songs.split('@')      
                 else:
-                    songs = songs.split('@')
-            numSong = numSong + 1            
-            sn.append(songs)
+                    if '@' not in songs:
+                        songs = songs.strip().replace('\n','').replace('/','')
+                    else:
+                        songs = songs.split('@')
+                numSong = numSong + 1            
+                sn.append(songs)
             
+    numSong = len(sn)
     numberOfSongsGlobal = numSong
     print(bcolors.YELLOW + "There are %s songs in the file provided" % numSong)
     print("The download should take about %s minute(s) and %s seconds" % (((numSong*10+120)//60), ((numSong*10+120)%60)))
@@ -312,7 +320,7 @@ def list_download(isHistory):
             if delay:
                 time.sleep(CONST.WAIT)
             a = a + 1
-        fhand.close()
+        
     except NameError as e:
         print(e)
 
@@ -462,6 +470,7 @@ def getHistory():
         
 def printHistory(search):
     global previouslyDownloaded
+    downloadSearch = []
     x = 0
     color = 30
     for titles in previouslyDownloaded:
@@ -477,7 +486,12 @@ def printHistory(search):
                 if color == 34:
                     color = 35
                 print(titles, end='|\x1b[0;%s;40m' % color)
-    print()       
+                downloadSearch.append(titles)
+    if (len(downloadSearch) > 0):
+        print("\nWould you like to download all of the above songs? (y/n)")
+        if (input(">>> ") == 'y'):
+            list_download(False, downloadSearch)
+                       
 
 def setSettings():
     file = open("Settings.txt", "w")
@@ -519,9 +533,9 @@ def main():
                     if choice == '1':
                         single_name_download("", 1, "", 0, False)                
                     elif choice == '2':                
-                        list_download(False)
+                        list_download(False, [])
                     elif choice == '3':
-                        list_download(True)
+                        list_download(True, [])
                     elif choice == '4':                
                         printHistory("")
                         input()
