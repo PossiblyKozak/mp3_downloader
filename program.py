@@ -6,7 +6,7 @@
 # All licence belongs to authour.
 
 # import all the libraries used
-import re, urllib, os, sys, threading, time, urllib.request, urllib.parse
+import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob
 
 global finishedDownload         # Number of songs which are currently finished downloading 
 finishedDownload = 0
@@ -181,7 +181,29 @@ def screen_clear():
 def removeSpecialCaharacters(inputString):  # Because this HTML parsing is shady at best
     return inputString.strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'') 
 
-# function to retrieve video title from provided link
+def generatePlaylist():  
+    file = open("Settings.txt", "r")
+    sett = file.readline()
+    setlist = sett.split(',')
+    bDir = os.getcwd() + "\\" + CONST.DIRECTORY
+    od = os.getcwd()
+
+    dir = input("Directory:")
+    plName = input("Name:")
+
+    print("Generating Playlist....")
+    print(bDir + "\\" + dir)
+    for (path, subdirs, files) in os.walk(bDir + "\\" + dir):    
+        os.chdir(path)
+        if glob.glob("*.mp3") != []:
+            _m3u = open(bDir + "\\" + dir + "\\" + plName + ".m3u", "w")
+            for song in glob.glob("*.mp3"):
+                _m3u.write(song + "\n")
+            _m3u.close()
+    input("Playlist Generated at "+ (bDir + "\\" + dir + "\\" + plName + ".m3u") + "\nPress Enter to Continue")
+    os.chdir(od)
+
+    # function to retrieve video title from provided link
 def video_title(url):
     try:
         webpage = urlopen(url).read()
@@ -212,6 +234,7 @@ def prompt():
     [5] Show count of all songs currently in the downloaded directory
     [6] Youtube Playlist Downloader 
     [7] Search History
+    [8] Generate Playlist
     [s] Change settings
     Press any other key from keyboard to exit''')
     choice = input('>>> ')
@@ -394,7 +417,7 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
                     time.sleep(CONST.WAIT*2)
                 if x:
                     finishedDownload = finishedDownload + 1
-                    printProgress(finishedDownload, numSongs, "", bcolors.GREEN + "Download Successful")                         
+                    printProgress(finishedDownload, numSongs, "", bcolors.GREEN + "Download of " + song +" Successful")                         
                     #print("%s / %s Songs downloaded" % (finishedDownload, numSongs))
                     if song not in previouslyDownloaded:            
                         file = open(CONST.LOG, "a")
@@ -446,13 +469,16 @@ def printProgress (iteration, total, prefix = '', suffix = '', decimals = 1, bar
             print(errors)    
         if len(downloadErrors) != 0:        
             print(bcolors.RED + "\nThere were %s errors in the download process" % len(downloadErrors))
-            print("Try downloading them individually, or with a different name format")
-            input(bcolors.WHITE + "Press Enter To Continue")
-            numberOfSongsGlobal = 0
-            screen_clear()
+            print("Try downloading them individually, or with a different name format")            
+            numberOfSongsGlobal = 0            
         else :
-            print(bcolors.GREEN + "There were no errors! :)")
-            input()
+            print(bcolors.GREEN + "There were no errors! :)")            
+        pl = input(bcolors.WHITE + "Would you like to create a playlist from these files? (y/n)")
+        if pl == "y":
+            generatePlaylist(CONST.DIRECTORY + CONST.SUBDIR, input("Name the Playlist: "))
+        input("Press Enter To Continue")
+        screen_clear()
+
 
 # program exit
 def exit(code):
@@ -461,7 +487,7 @@ def exit(code):
 def getHistory():
     global previouslyDownloaded 
     previouslyDownloaded = []
-    songLog = open(CONST.LOG, 'r')
+    songLog = open(os.getcwd() + "\\" + CONST.LOG, 'r')
     for songLink in songLog:
         if songLink.strip() != "": 
             sl = songLink.split('@')
@@ -562,6 +588,8 @@ def main():
                         input()
                     elif choice == 's':
                         changeSettings()
+                    elif choice == "8":
+                        generatePlaylist()
                     else:
                         Continue = False
                         screen_clear()
