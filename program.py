@@ -6,9 +6,35 @@
 # All licence belongs to authour.
 
 # import all the libraries used
-import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob
+import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob, youtube_dl, spotilib, win32gui, mutagen
+from mutagen.easyid3 import EasyID3
 
-global finishedDownload         # Number of songs which are currently finished downloading 
+class _Const(object):                       # Creation of a constant class, so that mass changes in the code can be done. These can now be changed from the settings in the client
+    RETRIES = 5                 # Total number of retries the program undergoes before giving up 
+    DIRECTORY = "Songs"         # The subdirectory name in which all the downloaded mp3's will reside.
+    WAIT = 4                    # Seconds of delay between the initialization of seperate threads.
+    LOG = "SongLog.txt"         # The name of the Log file in whichh all songs will have their url's saved.
+    MP3 = 1                     # Determining the website to use when downloadin the song. Sometimes one will be down.
+    ERROR = "Errors.txt"        # Saves the Song Name and the attempted download URL in this file
+    SONGLISTDIR = "SongLists"   # The directory in which the program will look for .txt files constining song names
+    SUBDIR = ""                 # The subdirectory where the songs are currently being saved within the DIRECTORY folder
+                 
+class update100Thread (threading.Thread):   # So that the updating of the top100's is done in the background
+    def __init__(self):
+        threading.Thread.__init__(self)
+    def run(self):
+        updateTop100()
+
+#Renaming a couple of things for ease of use (And capitalized constants)
+CONST = _Const 
+getSize = os.path.getsize
+user_input = input
+urlopen = urllib.request.urlopen
+encode = urllib.parse.urlencode
+retrieve = urllib.request.urlretrieve
+cleanup = urllib.request.urlcleanup()
+
+global finishedDownload      # Number of songs which are currently finished downloading 
 finishedDownload = 0
 global numberOfSongsGlobal      # The number of songs in the list of songs to be downloaded
 numberOfSongsGlobal = 0
@@ -27,49 +53,6 @@ class bcolors:                  #Creation of a color class for the text in the c
     PINK = '\x1b[0;35;40m'
     AQUA = '\x1b[0;36;40m'
     WHITE = '\x1b[0;37;40m'
-
-# Creation of a constant class, so that mass changes in the code can be done.
-# These can now be changed from the settings in the client
-class _Const(object):
-    RETRIES = 5                 # Total number of retries the program undergoes before giving up 
-    DIRECTORY = "Songs"         # The subdirectory name in which all the downloaded mp3's will reside.
-    WAIT = 4                    # Seconds of delay between the initialization of seperate threads.
-    LOG = "SongLog.txt"         # The name of the Log file in whichh all songs will have their url's saved.
-    MP3 = 0                     # Determining the website to use when downloadin the song. Sometimes one will be down.
-    ERROR = "Errors.txt"        # Saves the Song Name and the attempted download URL in this file
-    SONGLISTDIR = "SongLists"   # The directory in which the program will look for .txt files constining song names
-    SUBDIR = ""                 # The subdirectory where the songs are currently being saved within the DIRECTORY folder
-    
-# Sends each song download off onto its own thread, to maximize the download capacity of the machine
-class nameThread (threading.Thread):
-    def __init__(self, threadID, name, songName, numSong):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.name = name
-        self.songName = songName
-        self.numSong = numSong
-    def run(self):
-        try:
-            single_name_download(self.songName, self.numSong, "", 0, False)
-        except KeyboardInterrupt:
-            os.remove(CONST.DIRECTORY + "\%s.mp3" % self.songName)
-            exit(0)
-                 
-# So that the updating of the top100's is done in the background
-class update100Thread (threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-    def run(self):
-        updateTop100()
-
-#Renaming a couple of things for ease of use (And capitalized constants)
-CONST = _Const 
-getSize = os.path.getsize
-user_input = input
-urlopen = urllib.request.urlopen
-encode = urllib.parse.urlencode
-retrieve = urllib.request.urlretrieve
-cleanup = urllib.request.urlcleanup()
 
 def changeSettings():
     staySettings = True # Flag for staying on the settings screen which is only turned off if the letter x is entered 
@@ -106,73 +89,46 @@ def changeSettings():
                 os.rename(CONST.SONGLISTDIR, newValue)
                 CONST.SONGLISTDIR = newValue        
     
-def isTextFile(inValue):    # When setting the settings, some of the values have to be .txt files, this makes sure that file type is associated
+def isTextFile(inValue):                    # When setting the settings, some of the values have to be .txt files, this makes sure that file type is associated
     if ".txt" not in inValue:
         inValue = inValue + ".txt"   
     return inValue
     
-def getSettings():          # Opens the Settings.txt file, which contains all the 
-    file = open("Settings.txt", "r")
-    sett = file.readline()
-    setlist = sett.split(',')
-    CONST.RETRIES = int(setlist[0].strip())
-    CONST.DIRECTORY = setlist[1].strip()
-    CONST.WAIT = int(setlist[2].strip())
-    CONST.LOG = setlist[3].strip()
-    CONST.ERROR = setlist[4].strip()
-    CONST.SONGLISTDIR = setlist[5].strip()
+class Settings():
+    def sGet():
+        file = open("Settings.txt", "r")
+        sett = file.readline()
+        setlist = sett.split(',')
+        CONST.RETRIES = int(setlist[0].strip())
+        CONST.DIRECTORY = setlist[1].strip()
+        CONST.WAIT = int(setlist[2].strip())
+        CONST.LOG = setlist[3].strip()
+        CONST.ERROR = setlist[4].strip()
+        CONST.SONGLISTDIR = setlist[5].strip()   
     
+    def sSet():
+        file = open("Settings.txt", "w")
+        file.write("%s, %s, %s, %s, %s, %s" % (str(CONST.RETRIES), CONST.DIRECTORY, str(CONST.WAIT), CONST.LOG, CONST.ERROR, CONST.SONGLISTDIR))
 
-def printSettings():
-    print(CONST.RETRIES)
-    print(CONST.DIRECTORY)
-    print(CONST.WAIT)
-    print(CONST.LOG)
-    print(CONST.ERROR)
-    print(CONST.SONGLISTDIR)
+    def sPrint():
+        print(CONST.RETRIES)
+        print(CONST.DIRECTORY)
+        print(CONST.WAIT)
+        print(CONST.LOG)
+        print(CONST.ERROR)
+        print(CONST.SONGLISTDIR)
 
-def updateTop100():         # Creates the top 100s and puts them in the song list directory
-    for x in range(2006,2016):
-        if os.path.isfile(CONST.SONGLISTDIR +  "\%s.txt" % x) == False:  
-            file = open(CONST.SONGLISTDIR+  "\%s.txt" % x, "w")    
-            webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()         # The Bilboard webiste simply changes the year in the URL in order to switch between years in the top100 lists.    
-            songs = str(webpage).split('<h2 class="chart-row__song">')                                        # The furthest it goes back is 2006
-            for y in range (1,101):
-                s2 = songs[y].split('</h2>')
-                songName = removeSpecialCaharacters(s2[0]).split()
-                sn = ""
-                for songWord in songName:
-                    sn = "%s%s " % (sn, songWord.capitalize())
-                artist = s2[1].split('"Artist Name">')
-                if '</h3>' in artist[0]:
-                    artist = removeSpecialCaharacters(artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:].strip())
-                else:
-                    artist = removeSpecialCaharacters(artist[1].split("</a>")[0].replace('"','')[3:].strip())
-                artist = artist[:len(artist)-2].replace(" Featuring ", ";")
-                file.write("%s - %s\n" % (artist, sn.strip()))
-            file.close()
-            
-    file = open(CONST.SONGLISTDIR +  "\Top100.txt", "w")
-    webpage = urlopen("http://www.billboard.com/charts/hot-100").read() # This URL is the current top 100
-    songs = str(webpage).split('<h2 class="chart-row__song">')
-    
-    for y in range (1,101):
-        s2 = songs[y].split('</h2>')
-        songName = removeSpecialCaharacters(s2[0].lower()).split()
-        sn = ""
-        for songWord in songName:
-            sn = "%s%s " % (sn, songWord.capitalize())
-        artist = s2[1].split('"Artist Name">')
-        if '</h3>' in artist[0]:
-            artist = removeSpecialCaharacters(artist[0].split('</h3>')[0].split(">")[1].replace('"','')[3:])
-        else:
-            artist = removeSpecialCaharacters(artist[1].split("</a>")[0].replace('"','')[3:])
-        artist = artist[:len(artist)-2].replace(" Featuring ", ";")     # This makes the format the same as if you downloaded a spotify playlist from Spotlistr
-        file.write("%s - %s\n" % (artist, sn.strip()))
-    file.close()
+def updateTop100():                         # Creates the top 100s and puts them in the song list directory
+    for x in range(2006,2018): 
+        file = open(CONST.SONGLISTDIR + "/%s.txt" % x, "w")    
+        webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()         # The Bilboard webiste simply changes the year in the URL in order to switch between years in the top100 lists.    
+        songs = str(webpage).split('ye-chart-item__title">')                                              # The furthest it goes back is 2006
+        for y in range (1,len(songs)):
+            ns = songs[y].split('\\n')                
+            file.write("%s - %s\n" % (removeSpecialCaharacters(ns[1]), removeSpecialCaharacters(ns[4])))
+        file.close()
 
-# clear the terminal screen
-def screen_clear():
+def screen_clear():                         # clear the terminal screen
     if os.name == 'nt':
         os.system('cls')
     else:
@@ -204,6 +160,7 @@ def generatePlaylist():
     os.chdir(od)
 
     # function to retrieve video title from provided link
+
 def video_title(url):
     try:
         webpage = urlopen(url).read()
@@ -212,7 +169,7 @@ def video_title(url):
         title = 'Youtube Song'
     return title
 
-def print_format_table(): # For color purposes
+def print_format_table():                   # For colour purposes
     """
     prints table of formatted text format options
     """
@@ -240,7 +197,7 @@ def prompt():
     choice = input('>>> ')
     return str(choice)
 
-def youTubePlaylistDownloader(): #Asks for a url for a youtube playlist, parses out the videos from said playlist and adds them to a text file that you name
+def youTubePlaylistDownloader():            # Asks for a url for a youtube playlist, parses out the videos from said playlist and adds them to a text file that you name
     url = input("Enter the youtube playlist url: ")
     fileName = input("Enter a file Name: ")
     webpage = urlopen(url).read()
@@ -255,8 +212,7 @@ def youTubePlaylistDownloader(): #Asks for a url for a youtube playlist, parses 
         file.write(printed)
     file.close()
                 
-# download from a list
-def list_download(isHistory, sn):  
+def list_download(isHistory, sn):           # Download from a list
     global finishedDownload
     global numberOfSongsGlobal
     numberOfSongsGlobal = 1 # so that the main menu doesn't override the screen before the directory can be chosen
@@ -310,6 +266,8 @@ def list_download(isHistory, sn):
         if not os.path.exists(CONST.DIRECTORY + "\%s" % subFolder):
             os.makedirs("%s\%s" % (CONST.DIRECTORY, subFolder))
         CONST.SUBDIR = '\\%s' % subFolder
+    else:
+        CONST.SUBDIR = ""
     input("Press Enter to Begin Download...")
     a = 0
     #screen_clear()
@@ -324,164 +282,56 @@ def list_download(isHistory, sn):
             if type(songs) != type(sn):            
                 if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs.strip()) == False:
                     songs = songs.strip()
-                    thread = nameThread(a, songs, songs, numSong)
+                    downloadMP3(songs)
+                    #thread = nameThread(a, songs, songs, numSong)
                 else:
-                    finishedDownload = finishedDownload + 1
-                    printProgress(finishedDownload, numSong, "", bcolors.YELLOW + "The song '%s.mp3' is already downloaded" % songs)             
+                    finishedDownload = finishedDownload + 1        
                     delay = False
                     ts = False
             else:
                 if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs[0].strip()):
-                    finishedDownload = finishedDownload + 1
-                    printProgress(finishedDownload, numSong, "", bcolors.YELLOW + "The song '%s.mp3' is already downloaded" % songs)     
+                    finishedDownload = finishedDownload + 1  
                     delay = False
                     ts = False
                 else:
-                    thread = nameThread(a, songs[0].strip(), songs[1].strip(), numSong)
-            if ts:                   
-                thread.start()
-            if delay:
-                time.sleep(CONST.WAIT)
+                    pass
             a = a + 1
         
     except NameError as e:
         print(e)
 
-# download directly with a song name
-def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDownload):
-    global finishedDownload
-    global previouslyDownloaded
-    global downloadErrors        
-    global totalFileDownloadSize
-    if retries < CONST.RETRIES:
-        if song == "":
-            print(bcolors.WHITE + 'Enter the song name or full youtube link: ')  # get the song name from user
-            song = input('>>> ')
-        if song in previouslyDownloaded:
-            print(bcolors.PINK + "Song was previously downloaded, using stored URL")
-            downloadLinkOnly = previouslyDownloaded[previouslyDownloaded.index(song)+1]
-            if CONST.MP3 == 1:
-                if "yt-mp3" not in downloadLinkOnly:
-                    downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + downloadLinkOnly
-            elif CONST.MP3 == 0:
-                if "youtubeinmp3" not in downloadLinkOnly:
-                    downloadLinkOnly = "http://www.youtubeinmp3.com/fetch/?video=" + downloadLinkOnly
-        if "www.youtube.com" in song:                   
-            if CONST.MP3 == 0:
-                downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + song
-            elif CONST.MP3 == 1:
-                downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + song                  
-            song = video_title(song)            
-        succ = True
-        if "feat." in song:
-            song = song.split('(')[0]
-            # try to get the search result and exit upon error
-        if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song) == False or song not in previouslyDownloaded:         
-            if downloadLinkOnly == "":
-                try:
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Searching for %s..." % song)
-                    query_string = encode({"search_query" : song})
-                    html_content = urlopen("http://www.youtube.com/results?" + query_string)
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Found %s." % song)
-                    search_results = re.findall(r'href=\"\/watch\?v=(.{11})', html_content.read().decode())
-                except:
-                    printProgress(finishedDownload, numSongs, "", bcolors.RED + 'Network Error Downloading %s' % song) 
-                    succ = False
-            if succ == True:
-                # generate a download link that can be used to get the audio file using youtube2mp3 API
-                x = False                
-                if downloadLinkOnly == "":
-                    if CONST.MP3 == 0:
-                        downloadLinkOnly = 'http://www.youtubeinmp3.com/fetch/?video=' + 'http://www.youtube.com/watch?v=' + search_results[0]
-                    elif CONST.MP3 == 1:
-                        downloadLinkOnly = "http://www.yt-mp3.com/watch?v=" + 'http://www.youtube.com/watch?v=' + search_results[0]                    
-                try:
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "Downloading %s (Retry %s of %s)" % (song,retries, CONST.RETRIES))
-                    # code a progress bar for visuals? this way is more portable than wget
-                    retrieve(downloadLinkOnly, filename=CONST.DIRECTORY + CONST.SUBDIR + '\%s.mp3' % song)
-                    cleanup  # clear the cache created by urlretrieve
-                    x = True
-                    printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "The file '%s.mp3' is %sMB" % (song, round(getSize(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song)/1048576, 1)))
-                    fileSize = getSize(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song) 
-                    if fileSize < 1048576:                        
-                        os.remove(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % song)
-                        single_name_download(song, numSongs, downloadLinkOnly, retries + 1, False)
-                        x = False
-                        time.sleep(CONST.WAIT*2)
-                    else : 
-                        totalFileDownloadSize = totalFileDownloadSize + fileSize 
-                except:
-                    printProgress(finishedDownload, numSongs, "", bcolors.RED + 'Error downloading %s' % song)
-                    single_name_download(song, numSongs, downloadLinkOnly, retries + 1, False)
-                    x = False
-                    time.sleep(CONST.WAIT*2)
-                if x:
-                    finishedDownload = finishedDownload + 1
-                    printProgress(finishedDownload, numSongs, "", bcolors.GREEN + "Download of " + song +" Successful")                         
-                    #print("%s / %s Songs downloaded" % (finishedDownload, numSongs))
-                    if song not in previouslyDownloaded:            
-                        file = open(CONST.LOG, "a")
-                        file.write("\n%s@%s" % (song, downloadLinkOnly))
-                        file.close()
-        else:
-            printProgress(finishedDownload, numSongs, "", bcolors.YELLOW + "The song '%s.mp3 is already downloaded" % song)            
-            finishedDownload = finishedDownload + 1
-            printProgress(finishedDownload, numSongs)
-            #print("%s / %s Songs downloaded" % (finishedDownload, numSongs))
-    else:        
-        finishedDownload = finishedDownload + 1
-        downloadErrors.append(song)
-        printProgress(finishedDownload, numSongs, "", bcolors.RED + "Max retries reached for %s" % song)
-        if not os.path.exists(CONST.ERROR):
-            file = open(CONST.ERROR, "w")
-            file.close()
-        file = open(CONST.ERROR, "a")
-        file.write("\n%s@%s" % (song, downloadLinkOnly))
-        file.close()
+def downloadMP3(sName, subFolder = ""):
+    query_string = urllib.parse.urlencode({"search_query" : sName + " Audio"})
+    html_content = urllib.request.urlopen("http://www.youtube.com/results?" + query_string)
+    search_results = re.findall(r'href=\"\/watch\?v=(.{11})', html_content.read().decode())
+    url = 'http://www.youtube.com/watch?v=' + search_results[0]
+    options = {
+        'format': 'bestaudio/best',
+        'extractaudio' : True,  # only keep the audio
+        'audioformat' : "mp3",  # convert to mp3 
+        'outtmpl': CONST.DIRECTORY + CONST.SUBDIR + '/%(title)s.mp3',    # name the file the Title of the video
+        'noplaylist' : True,    # only download single song, not playlist
+        }
+    with youtube_dl.YoutubeDL(options) as ydl:
+        info_dict = ydl.extract_info(url, download=False)
+        if (not os.path.exists(CONST.DIRECTORY + CONST.SUBDIR + "\\" + removeAudio(info_dict.get("title")) + ".mp3")):
+            ydl.download([url])  
+            os.rename(CONST.DIRECTORY + CONST.SUBDIR + "\\" + info_dict.get("title") + ".mp3", CONST.DIRECTORY + CONST.SUBDIR + "\\" + removeAudio(info_dict.get("title")) + ".mp3")
 
-def printProgress (iteration, total, prefix = '', suffix = '', decimals = 1, barLength = 75):
-    global finishedDownload
-    global downloadErrors    
-    global numberOfSongsGlobal
-    global totalFileDownloadSize
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        barLength   - Optional  : character length of bar (Int)
-    """
-    formatStr       = "{0:." + str(decimals) + "f}"
-    percents        = formatStr.format(100 * (iteration / float(total)))
-    filledLength    = int(round(barLength * iteration / float(total)))
-    bar             = bcolors.BLUE + '█' * filledLength + bcolors.WHITE + '-' * (barLength - filledLength)
-    screen_clear()
-    print(bcolors.WHITE + '\r%s |%s| %s%s \n%s' % (prefix, bar, percents, '%', suffix), end = ""),    
-    print()
-    if iteration == total:
-        print(bcolors.WHITE + "Total of %sMb Downloaded" % "{0:.2f}".format(totalFileDownloadSize/1048576))
-        if len(downloadErrors) != 0:
-            print("Errors:" + bcolors.RED)
-        for errors in downloadErrors:
-            print(errors)    
-        if len(downloadErrors) != 0:        
-            print(bcolors.RED + "\nThere were %s errors in the download process" % len(downloadErrors))
-            print("Try downloading them individually, or with a different name format")            
-            numberOfSongsGlobal = 0            
-        else :
-            print(bcolors.GREEN + "There were no errors! :)")            
-        pl = input(bcolors.WHITE + "Would you like to create a playlist from these files? (y/n)")
-        if pl == "y":
-            generatePlaylist(CONST.DIRECTORY + CONST.SUBDIR, input("Name the Playlist: "))
-        input("Press Enter To Continue")
-        screen_clear()
+def removeAudio(name):
+    return name.lower().replace("audio", "").replace("(video)", "").replace("official", "").replace("official video", "").replace("with lyrics", "").replace("audio + lyrics", "").replace("lyric", "").replace("lyrics", "").replace("official music video", "").replace("hq audio", "").replace("audio hq", "").replace("hd", "").replace("hq", "").replace("[]", "").replace("()", "").strip().title()
 
+def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDownload):     # download directly with a song name
+    if song == "":
+        print(bcolors.WHITE + 'Enter the song name or full youtube link: ')  # get the song name from user
+        song = input('>>> ')
+    if "www.youtube.com" in song: 
+        song = video_title(song)  
+    if "feat." in song:
+        song = song.split('(')[0]
+    downloadMP3(song) 
 
-# program exit
-def exit(code):
+def exit(code):                             # program exit
     sys.exit(code)
 
 def getHistory():
@@ -513,18 +363,28 @@ def printHistory(search):
                     color = 35
                 print(titles, end='|\x1b[0;%s;40m' % color)
                 downloadSearch.append(titles)
-    if (len(downloadSearch) > 0):
-        print("\nWould you like to download all of the above songs? (y/n)")
-        if (input(">>> ") == 'y'):
-            list_download(False, downloadSearch)
-                       
 
-def setSettings():
-    file = open("Settings.txt", "w")
-    file.write("%s, %s, %s, %s, %s, %s" % (str(CONST.RETRIES), CONST.DIRECTORY, str(CONST.WAIT), CONST.LOG, CONST.ERROR, CONST.SONGLISTDIR))
-    
-# main guts of the program
-def main():         
+def getwindow(Title="SpotifyMainWindow"):
+	window_id = win32gui.FindWindow(Title, None)
+	return window_id
+
+def song_info():
+	try:
+		song_info = win32gui.GetWindowText(getwindow())
+	except:
+		pass
+	return song_info
+
+def getSong():
+	try:
+		temp = song_info()
+		artist, song = temp.split("-",1)
+		song = song.strip()
+		return song
+	except:
+		return "There is nothing playing at this moment"
+
+def main():                                 # main guts of the program
     global finishedDownload
     global numberOfSongsGlobal
     global downloadErrors    
@@ -532,9 +392,9 @@ def main():
     Continue = True
     finishedDownload = 0
     if not os.path.exists("Settings.txt"):
-        setSettings()
+        Settings.sSet()
     else:
-        getSettings()
+        Settings.sGet()
     if not os.path.exists(CONST.DIRECTORY):
         os.makedirs(CONST.DIRECTORY)
     if not os.path.exists(CONST.SONGLISTDIR):
@@ -542,8 +402,9 @@ def main():
     if not os.path.exists(CONST.LOG):
         file = open(CONST.LOG, "w")
         file.close()
-    thread = update100Thread()
-    thread.start()       
+    if not os.path.exists(CONST.SONGLISTDIR + "2006.txt"):
+        thread = update100Thread()
+        thread.start()       
     while Continue:
         if finishedDownload == numberOfSongsGlobal + 1 or numberOfSongsGlobal == 0:
             try:
@@ -560,6 +421,8 @@ def main():
                         single_name_download("", 1, "", 0, False)                
                     elif choice == '2':                
                         list_download(False, [])
+                    elif choice == 'c':         
+                        single_name_download(song_info(), 1, "", 0, False)
                     elif choice == '3':
                         list_download(True, [])
                     elif choice == '4':                
