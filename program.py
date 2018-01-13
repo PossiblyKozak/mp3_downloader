@@ -6,7 +6,7 @@
 # All licence belongs to authour.
 
 # import all the libraries used
-import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob, youtube_dl, spotilib, win32gui, mutagen
+import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob, youtube_dl, spotilib, win32gui, mutagen, win32api
 from mutagen.easyid3 import EasyID3
 
 class _Const(object):                       # Creation of a constant class, so that mass changes in the code can be done. These can now be changed from the settings in the client
@@ -34,16 +34,8 @@ encode = urllib.parse.urlencode
 retrieve = urllib.request.urlretrieve
 cleanup = urllib.request.urlcleanup()
 
-global finishedDownload      # Number of songs which are currently finished downloading 
-finishedDownload = 0
-global numberOfSongsGlobal      # The number of songs in the list of songs to be downloaded
-numberOfSongsGlobal = 0
 global previouslyDownloaded     # An array of names of sings which have already been downloaded
 previouslyDownloaded = []
-global downloadErrors           # Any errors which occur in the download process are added to this array
-downloadErrors = []
-global totalFileDownloadSize    # total filesize (in Mb) downloaded in this batch of files
-totalFileDownloadSize = 0
 
 class bcolors:                  #Creation of a color class for the text in the console
     RED = '\x1b[0;31;40m'
@@ -212,55 +204,37 @@ def youTubePlaylistDownloader():            # Asks for a url for a youtube playl
         file.write(printed)
     file.close()
                 
-def list_download(isHistory, sn):           # Download from a list
-    global finishedDownload
-    global numberOfSongsGlobal
-    numberOfSongsGlobal = 1 # so that the main menu doesn't override the screen before the directory can be chosen
-    a = 0
-    numSong = 0
-    if (len(sn) == 0):
-        fileUnOpened = True
-        while fileUnOpened:
-            if isHistory:
-                fileName = CONST.LOG()  # if the download list is already defined, then dont bother asking for a file name.        
-            else:          
-                fileName = input('Please enter the name of the file in the "%s" folder: ' % CONST.SONGLISTDIR)  # get the file name to be opened
-            try:
-                fhand = open(CONST.SONGLISTDIR + ("\%s" % fileName) + ".txt", 'r')
-                print ('File opened successfully')
-                fileUnOpened = False
-            except IOError:
-                print('File does not exist\n')
-                # loops until you enter a valid file                
-        screen_clear()
-
-        if isHistory:
-            ph = input("Press h to print your history, or press any other characters to continue:")     #Make the history visible so you can know what you're getting into
-            if ph == 'h' or ph == 'H':
-                screen_clear()
-                printHistory("")
-            else:
-                screen_clear()   
-        
-        for songs in fhand:        
-            if songs.strip() != "":
-                if "www.youtube.com" in songs: # This happens in the history as well as when getting list of youtube links. 
-                    if '@' not in songs:
-                        songs = songs.strip()
-                    else:
-                        songs = songs.split('@')      
+def list_download(isHistory):           # Download from a list
+    sn = []    
+    fileUnOpened = True
+    while fileUnOpened:      
+        fileName = input('Please enter the name of the file in the "%s" folder: ' % CONST.SONGLISTDIR)  # get the file name to be opened
+        try:
+            fhand = open(CONST.SONGLISTDIR + ("\%s" % fileName) + ".txt", 'r')
+            print ('File opened successfully')
+            fileUnOpened = False
+        except IOError:
+            print('File does not exist\n')
+            # loops until you enter a valid file                
+    screen_clear()  
+    
+    for songs in fhand:        
+        if songs.strip() != "":
+            if "www.youtube.com" in songs: # This happens in the history as well as when getting list of youtube links. 
+                if '@' not in songs:
+                    songs = songs.strip()
                 else:
-                    if '@' not in songs:
-                        songs = songs.strip().replace('\n','').replace('/','')
-                    else:
-                        songs = songs.split('@')
-                numSong = numSong + 1            
-                sn.append(songs)
+                    songs = songs.split('@')      
+            else:
+                if '@' not in songs:
+                    songs = songs.strip().replace('\n','').replace('/','')
+                else:
+                    songs = songs.split('@')
+            numSong = numSong + 1            
+            sn.append(songs)
             
     numSong = len(sn)
-    numberOfSongsGlobal = numSong
     print(bcolors.YELLOW + "There are %s songs in the file provided" % numSong)
-    print("The download should take about %s minute(s) and %s seconds" % (((numSong*10+120)//60), ((numSong*10+120)%60)))
     if input(bcolors.WHITE + "Would you like to create a subfolder for this group of songs? (y/n)\n>>> ") == "y":
         subFolder = input("Enter the name of the folder\n>>>") 
         if not os.path.exists(CONST.DIRECTORY + "\%s" % subFolder):
@@ -269,7 +243,6 @@ def list_download(isHistory, sn):           # Download from a list
     else:
         CONST.SUBDIR = ""
     input("Press Enter to Begin Download...")
-    a = 0
     #screen_clear()
     try:
         for songs in sn:
@@ -283,20 +256,16 @@ def list_download(isHistory, sn):           # Download from a list
                 if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs.strip()) == False:
                     songs = songs.strip()
                     downloadMP3(songs)
-                    #thread = nameThread(a, songs, songs, numSong)
                 else:
-                    finishedDownload = finishedDownload + 1        
                     delay = False
                     ts = False
             else:
                 if os.path.isfile(CONST.DIRECTORY + CONST.SUBDIR + "\%s.mp3" % songs[0].strip()):
-                    finishedDownload = finishedDownload + 1  
                     delay = False
                     ts = False
                 else:
                     pass
-            a = a + 1
-        
+
     except NameError as e:
         print(e)
 
@@ -319,9 +288,9 @@ def downloadMP3(sName, subFolder = ""):
             os.rename(CONST.DIRECTORY + CONST.SUBDIR + "\\" + info_dict.get("title") + ".mp3", CONST.DIRECTORY + CONST.SUBDIR + "\\" + removeAudio(info_dict.get("title")) + ".mp3")
 
 def removeAudio(name):
-    return name.lower().replace("audio", "").replace("(video)", "").replace("official", "").replace("official video", "").replace("with lyrics", "").replace("audio + lyrics", "").replace("lyric", "").replace("lyrics", "").replace("official music video", "").replace("hq audio", "").replace("audio hq", "").replace("hd", "").replace("hq", "").replace("[]", "").replace("()", "").strip().title()
+    return name.lower().replace("audio", "").replace("(video)", "").replace("official", "").replace("official video", "").replace("with lyrics", "").replace("audio + lyrics", "").replace("lyric", "").replace("lyrics", "").replace("official music video", "").replace("hq audio", "").replace("audio hq", "").replace("hd", "").replace("hq", "").split('(')[0].split('[')[0].strip().title()
 
-def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDownload):     # download directly with a song name
+def single_name_download(song = "", toMain = True):     # download directly with a song name
     if song == "":
         print(bcolors.WHITE + 'Enter the song name or full youtube link: ')  # get the song name from user
         song = input('>>> ')
@@ -330,6 +299,30 @@ def single_name_download(song, numSongs, downloadLinkOnly, retries, isYoutubeDow
     if "feat." in song:
         song = song.split('(')[0]
     downloadMP3(song) 
+    if (toMain):
+        mainMenu()
+
+def monitorSpotify(scnds):    
+    siOld = ""
+    songsDownloaded = 0    
+    while True:
+        if (siOld != song_info()):
+            try:
+                siOld = song_info()
+                downloadMP3(song_info())
+                songsDownloaded = songsDownloaded + 1
+                print("There have been %s songs downloaded" % songsDownloaded )            
+            except:
+                print("There was an error downloading ")
+        time.sleep(int(scnds))    
+        #next()
+         
+def hwcode(Media):
+	hwcode = win32api.MapVirtualKey(Media, 0)
+	return hwcode
+
+def next():
+	win32api.keybd_event(0xB0, hwcode(0xB0))
 
 def exit(code):                             # program exit
     sys.exit(code)
@@ -370,7 +363,7 @@ def getwindow(Title="SpotifyMainWindow"):
 
 def song_info():
 	try:
-		song_info = win32gui.GetWindowText(getwindow())
+		song_info = win32gui.GetWindowText(getwindow())        
 	except:
 		pass
 	return song_info
@@ -385,12 +378,7 @@ def getSong():
 		return "There is nothing playing at this moment"
 
 def main():                                 # main guts of the program
-    global finishedDownload
-    global numberOfSongsGlobal
-    global downloadErrors    
-    global totalFileDownloadSize
     Continue = True
-    finishedDownload = 0
     if not os.path.exists("Settings.txt"):
         Settings.sSet()
     else:
@@ -404,67 +392,65 @@ def main():                                 # main guts of the program
         file.close()
     if not os.path.exists(CONST.SONGLISTDIR + "2006.txt"):
         thread = update100Thread()
-        thread.start()       
-    while Continue:
-        if finishedDownload == numberOfSongsGlobal + 1 or numberOfSongsGlobal == 0:
-            try:
-                CONST.SUBDIR = ""
-                downloadErrors = []
-                finishedDownload = 0
-                numberOfSongsGlobal = 0
-                totalFileDownloadSize = 0
-                screen_clear()
-                getHistory()
-                choice = prompt()        
-                try:
-                    if choice == '1':
-                        single_name_download("", 1, "", 0, False)                
-                    elif choice == '2':                
-                        list_download(False, [])
-                    elif choice == 'c':         
-                        single_name_download(song_info(), 1, "", 0, False)
-                    elif choice == '3':
-                        list_download(True, [])
-                    elif choice == '4':                
-                        printHistory("")
-                        input()
-                    elif choice == '5':
-                        alls = os.listdir(CONST.DIRECTORY)
-                        totalSize = 0
-                        totalCount = 0
-                        for sng in alls:
-                            if os.path.isdir(os.path.join(CONST.DIRECTORY, sng)):
-                                suballs = os.listdir(os.path.join(CONST.DIRECTORY, sng))
-                                for subsng in suballs:
-                                    totalSize = totalSize + getSize(os.path.join(CONST.DIRECTORY, sng) + "\%s" % subsng)/1048576
-                                    totalCount = totalCount + 1
-                            else:
-                                totalSize = totalSize + getSize(CONST.DIRECTORY + "\%s" % sng)/1048576
-                                totalCount = totalCount + 1
-                        print("There are %s songs totalling to %s Mb of .mp3 files." % (totalCount, "{0:.2f}".format(totalSize)))
-                        input()
-                    elif choice == '6':
-                        youTubePlaylistDownloader()
-                    elif choice == '7':
-                        search = input("Enter search term\n>>> ")
-                        printHistory(search)
-                        input()
-                    elif choice == 's':
-                        changeSettings()
-                    elif choice == "8":
-                        generatePlaylist()
+        thread.start()     
+    mainMenu()
+
+def mainMenu():  
+    try:
+        CONST.SUBDIR = ""
+        screen_clear()
+        getHistory()
+        choice = prompt()        
+        try:
+            if choice == '1':
+                single_name_download()                
+            elif choice == '2':                
+                list_download(False)
+            elif choice == 'c':         
+                single_name_download(song_info())
+            elif choice == '3':
+                list_download(True)
+            elif choice == '4':                
+                printHistory("")
+                input()
+            elif choice == '5':
+                alls = os.listdir(CONST.DIRECTORY)
+                totalSize = 0
+                totalCount = 0
+                for sng in alls:
+                    if os.path.isdir(os.path.join(CONST.DIRECTORY, sng)):
+                        suballs = os.listdir(os.path.join(CONST.DIRECTORY, sng))
+                        for subsng in suballs:
+                            totalSize = totalSize + getSize(os.path.join(CONST.DIRECTORY, sng) + "\%s" % subsng)/1048576
+                            totalCount = totalCount + 1
                     else:
-                        Continue = False
-                        screen_clear()
-                        exit(1)
-                except NameError:
-                    print("NameError")
-                    Continue = False
-                    exit(1)
-            except KeyboardInterrupt:
+                        totalSize = totalSize + getSize(CONST.DIRECTORY + "\%s" % sng)/1048576
+                        totalCount = totalCount + 1
+                print("There are %s songs totalling to %s Mb of .mp3 files." % (totalCount, "{0:.2f}".format(totalSize)))
+                input()
+            elif choice == '6':
+                youTubePlaylistDownloader()
+            elif choice == '7':
+                search = input("Enter search term\n>>> ")
+                printHistory(search)
+                input()
+            elif choice == 's':
+                changeSettings()
+            elif choice == '8':
+                generatePlaylist()
+            elif choice == '9':
+                monitorSpotify(input("How long in between checking for a new track: "))
+            else:
                 Continue = False
+                screen_clear()
                 exit(1)
-            time.sleep(0.5)
+        except NameError:
+            print("NameError")
+            Continue = False
+            exit(1)
+    except KeyboardInterrupt:
+        Continue = False
+        exit(1)
 
 if __name__ == '__main__':
     main()  # run the main program
