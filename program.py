@@ -6,7 +6,7 @@
 # All licence belongs to authour.
 
 # import all the libraries used
-import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob, youtube_dl, spotilib, win32gui, mutagen, win32api
+import re, urllib, os, sys, threading, time, urllib.request, urllib.parse, glob, youtube_dl, mutagen
 from mutagen.easyid3 import EasyID3
 
 class _Const(object):                       # Creation of a constant class, so that mass changes in the code can be done. These can now be changed from the settings in the client
@@ -23,7 +23,8 @@ class update100Thread (threading.Thread):   # So that the updating of the top100
     def __init__(self):
         threading.Thread.__init__(self)
     def run(self):
-        updateTop100()
+        #updateTop100()
+        pass
 
 #Renaming a couple of things for ease of use (And capitalized constants)
 CONST = _Const 
@@ -32,7 +33,7 @@ user_input = input
 urlopen = urllib.request.urlopen
 encode = urllib.parse.urlencode
 retrieve = urllib.request.urlretrieve
-cleanup = urllib.request.urlcleanup()
+cleanup = urllib.request.urlcleanup
 
 global previouslyDownloaded     # An array of names of sings which have already been downloaded
 previouslyDownloaded = []
@@ -111,7 +112,7 @@ class Settings():
         print(CONST.SONGLISTDIR)
 
 def updateTop100():                         # Creates the top 100s and puts them in the song list directory
-    for x in range(2006,2018): 
+    for x in range(2006,2019): 
         file = open(CONST.SONGLISTDIR + "/%s.txt" % x, "w")    
         webpage = urlopen("http://www.billboard.com/charts/year-end/%s/hot-100-songs" % x).read()         # The Bilboard webiste simply changes the year in the URL in order to switch between years in the top100 lists.    
         songs = str(webpage).split('ye-chart-item__title">')                                              # The furthest it goes back is 2006
@@ -129,30 +130,8 @@ def screen_clear():                         # clear the terminal screen
 def removeSpecialCaharacters(inputString):  # Because this HTML parsing is shady at best
     return inputString.strip().replace("&#039;", "'").replace(" &amp; ",";").replace("&quot;",'') 
 
-def generatePlaylist():  
-    file = open("Settings.txt", "r")
-    sett = file.readline()
-    setlist = sett.split(',')
-    bDir = os.getcwd() + "\\" + CONST.DIRECTORY
-    od = os.getcwd()
 
-    dir = input("Directory:")
-    plName = input("Name:")
-
-    print("Generating Playlist....")
-    print(bDir + "\\" + dir)
-    for (path, subdirs, files) in os.walk(bDir + "\\" + dir):    
-        os.chdir(path)
-        if glob.glob("*.mp3") != []:
-            _m3u = open(bDir + "\\" + dir + "\\" + plName + ".m3u", "w")
-            for song in glob.glob("*.mp3"):
-                _m3u.write(song + "\n")
-            _m3u.close()
-    input("Playlist Generated at "+ (bDir + "\\" + dir + "\\" + plName + ".m3u") + "\nPress Enter to Continue")
-    os.chdir(od)
-
-    # function to retrieve video title from provided link
-
+# function to retrieve video title from provided link
 def video_title(url):
     try:
         webpage = urlopen(url).read()
@@ -183,9 +162,8 @@ def prompt():
     [5] Show count of all songs currently in the downloaded directory
     [6] Youtube Playlist Downloader 
     [7] Search History
-    [8] Generate Playlist
     [s] Change settings
-    Press any other key from keyboard to exit''')
+    Press 'x' to exit''')
     choice = input('>>> ')
     return str(choice)
 
@@ -281,11 +259,22 @@ def downloadMP3(sName, subFolder = ""):
         'outtmpl': CONST.DIRECTORY + CONST.SUBDIR + '/%(title)s.mp3',    # name the file the Title of the video
         'noplaylist' : True,    # only download single song, not playlist
         }
-    with youtube_dl.YoutubeDL(options) as ydl:
-        info_dict = ydl.extract_info(url, download=False)
-        if (not os.path.exists(CONST.DIRECTORY + CONST.SUBDIR + "\\" + removeAudio(info_dict.get("title")) + ".mp3")):
-            ydl.download([url])  
-            os.rename(CONST.DIRECTORY + CONST.SUBDIR + "\\" + info_dict.get("title") + ".mp3", CONST.DIRECTORY + CONST.SUBDIR + "\\" + removeAudio(info_dict.get("title")) + ".mp3")
+    try:
+
+        with youtube_dl.YoutubeDL(options) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            songName = ''.join([i if ord(i) < 128 else ' ' for i in removeAudio(info_dict.get("title"))])
+            if (not os.path.exists(CONST.DIRECTORY + CONST.SUBDIR + "\\" + songName + ".mp3")):
+                if (input("Download %s? (Y/N)" % songName)).upper() == 'Y':
+                    ydl.download([url])  
+                    songLog = open(os.getcwd() + "\\" + CONST.LOG, 'a')
+                    print(songName)
+                    print(url)
+                    songLog.write("%s@%s\n" % (songName, url))
+                    songLog.close()
+    except:
+        print("Error Downloading")
+        input("Press enter to continue")
 
 def removeAudio(name):
     return name.lower().replace("audio", "").replace("(video)", "").replace("official", "").replace("official video", "").replace("with lyrics", "").replace("audio + lyrics", "").replace("lyric", "").replace("lyrics", "").replace("official music video", "").replace("hq audio", "").replace("audio hq", "").replace("hd", "").replace("hq", "").split('(')[0].split('[')[0].strip().title()
@@ -299,30 +288,6 @@ def single_name_download(song = "", toMain = True):     # download directly with
     if "feat." in song:
         song = song.split('(')[0]
     downloadMP3(song) 
-    if (toMain):
-        mainMenu()
-
-def monitorSpotify(scnds):    
-    siOld = ""
-    songsDownloaded = 0    
-    while True:
-        if (siOld != song_info()):
-            try:
-                siOld = song_info()
-                downloadMP3(song_info())
-                songsDownloaded = songsDownloaded + 1
-                print("There have been %s songs downloaded" % songsDownloaded )            
-            except:
-                print("There was an error downloading ")
-        time.sleep(int(scnds))    
-        #next()
-         
-def hwcode(Media):
-	hwcode = win32api.MapVirtualKey(Media, 0)
-	return hwcode
-
-def next():
-	win32api.keybd_event(0xB0, hwcode(0xB0))
 
 def exit(code):                             # program exit
     sys.exit(code)
@@ -357,10 +322,6 @@ def printHistory(search):
                 print(titles, end='|\x1b[0;%s;40m' % color)
                 downloadSearch.append(titles)
 
-def getwindow(Title="SpotifyMainWindow"):
-	window_id = win32gui.FindWindow(Title, None)
-	return window_id
-
 def song_info():
 	try:
 		song_info = win32gui.GetWindowText(getwindow())        
@@ -392,8 +353,9 @@ def main():                                 # main guts of the program
         file.close()
     if not os.path.exists(CONST.SONGLISTDIR + "2006.txt"):
         thread = update100Thread()
-        thread.start()     
-    mainMenu()
+        thread.start()    
+    while Continue == True:         
+        mainMenu()
 
 def mainMenu():  
     try:
@@ -436,11 +398,7 @@ def mainMenu():
                 input()
             elif choice == 's':
                 changeSettings()
-            elif choice == '8':
-                generatePlaylist()
-            elif choice == '9':
-                monitorSpotify(input("How long in between checking for a new track: "))
-            else:
+            elif choice == 'x':
                 Continue = False
                 screen_clear()
                 exit(1)
