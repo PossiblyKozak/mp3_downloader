@@ -13,9 +13,27 @@ import time
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 
-def getSingle(plUrl):
-    driver = webdriver.Chrome("./chromedriver.exe")
+def getDriver(plUrl):
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    if os.name == "posix":        
+        options = webdriver.FirefoxOptions()
+        options.headless = True
+        options.logpath = os.devnull
+        driver = webdriver.Firefox("./", options=options, service_log_path=os.devnull)
+    else:
+        driver = webdriver.Chrome("./chromedriver.exe", options=chrome_options)
+    print("Getting page...")
     driver.get(plUrl)
+    print("Page received")
+    return driver
+
+
+def getSingle(plUrl):
+    print("Starting web service...")
+    driver = getDriver(plUrl)
     elements = []
     elems = driver.find_elements_by_xpath("//a[@id='video-title']")
     print("Collecting link...")
@@ -24,8 +42,7 @@ def getSingle(plUrl):
     return res
 
 def getPlaylist(plUrl):
-    driver = webdriver.Chrome("./chromedriver.exe")
-    driver.get(plUrl)
+    driver = getDriver(plUrl)
     elements = []
     elems = driver.find_elements_by_xpath("//a[@href]")
     print("Collecting links...")
@@ -101,7 +118,10 @@ def changeSettings():
             if int(setIndex) == 0:
                 CONST.RETRIES = int(newValue)
             elif int(setIndex) == 1:
-                os.rename(CONST.DIRECTORY, newValue)
+                try:
+                    os.rename(CONST.DIRECTORY, newValue)
+                except:
+                    pass
                 CONST.DIRECTORY = newValue
             elif int(setIndex) == 2:
                 CONST.WAIT = int(newValue)
@@ -273,7 +293,7 @@ def list_download(isHistory):           # Download from a list
                     pass
 
     except NameError as e:
-        print(e)
+        print(e.message)
 
 def downloadMP3(sName, prompt = True, subdir = ""):
     if "www.youtube.com" in sName:
@@ -432,8 +452,8 @@ def mainMenu():
                 Continue = False
                 screen_clear()
                 exit(1)
-        except NameError:
-            print("NameError")
+        except NameError as e:
+            print("NameError", e.message)
             Continue = False
             exit(1)
     except KeyboardInterrupt:
